@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 # ==========================================
 # 1. 설정 및 상수 정의 (Configuration)
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V17.4", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V17.5", layout="wide", page_icon="🔥")
 
 # Phase별 목표 비중 정의
 PHASE_CONFIG = {
@@ -82,7 +82,7 @@ def format_krw(value):
 # 3. 메인 로직 및 UI
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown(f"**Ver 17.4 (Dual Account Support)** | System Owner: **Busan Programmer**")
+st.markdown(f"**Ver 17.5 (UI Enhanced)** | System Owner: **Busan Programmer**")
 
 # 데이터 로딩
 df, qqq_price, qqq_rsi, qqq_mdd, usd_krw_rate = get_market_data()
@@ -135,7 +135,10 @@ if df is not None:
     # 1. 시장 상황판
     st.header("1. 시장 상황판 (Market Status)")
     col1, col2, col3 = st.columns(3)
-    col1.metric("QQQ 현재가", f"${qqq_price:.2f}")
+    
+    # [요청 1] QQQ 가격 옆에 원화 환산 가격 표시
+    qqq_krw = qqq_price * usd_krw_rate
+    col1.metric("QQQ 현재가 (원화)", f"${qqq_price:.2f}", f"({format_krw(qqq_krw)})")
     
     rsi_label = "표준 (Neutral)"
     if qqq_rsi >= 80: rsi_label = "🚨 광기 (Overbought)"
@@ -150,8 +153,25 @@ if df is not None:
     # 2. 포트폴리오 진단
     st.markdown("---")
     st.header("2. 포트폴리오 진단 (Diagnosis)")
+    
+    # [CRO 추가 기능] Phase 진행률 바 (Level Up System)
+    if current_phase < 5:
+        prev_limit = PHASE_CONFIG[current_phase-1]['limit'] if current_phase > 1 else 0
+        next_limit = PHASE_CONFIG[current_phase]['limit']
+        progress = (total_assets - prev_limit) / (next_limit - prev_limit)
+        progress = max(0.0, min(1.0, progress)) # 0~1 사이 클램핑
+        st.progress(progress, text=f"🚀 Next Level ({PHASE_CONFIG[current_phase+1]['name']}) 까지 진행률: {progress*100:.1f}%")
+    else:
+        st.progress(1.0, text="🏆 Final Phase 달성! (은퇴 준비 완료)")
+
     p1, p2, p3, p4 = st.columns(4)
-    p1.metric("현재 Phase", PHASE_CONFIG[current_phase]['name'])
+    
+    # [요청 2] Phase 옆에 목표 비중 표시
+    phase_info = PHASE_CONFIG[current_phase]
+    phase_desc = f"{phase_info['name']}"
+    ratio_desc = f"목표 TQQQ {int(phase_info['target_stock']*100)}% : 현금 {int(phase_info['target_cash']*100)}%"
+    
+    p1.metric("현재 Phase", phase_desc, ratio_desc)
     p2.metric("총 자산 (합산)", format_krw(total_assets))
     p3.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
     p4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
@@ -174,7 +194,7 @@ if df is not None:
     action_color = "blue"
     trade_account_msg = "👉 **거래는 [B계좌: 스나이퍼]에서 수행하십시오.**"
 
-    # --- Logic Engine V17.4 ---
+    # --- Logic Engine V17.5 (Logic Unchanged) ---
     
     if is_loss:
         final_action = "🛑 HOLD (매도 금지)"
