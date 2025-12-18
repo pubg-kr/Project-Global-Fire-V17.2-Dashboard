@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
 
 # ==========================================
 # 1. 설정 및 상수 정의 (Configuration)
@@ -24,37 +23,45 @@ PHASE_CONFIG = {
 # ==========================================
 
 def get_market_data():
-    """QQQ 주봉 데이터, RSI, MDD 계산"""
+    """QQQ 주봉 데이터, RSI, MDD 계산 (버그 수정 버전)"""
     ticker = "QQQ"
-    # 주봉 데이터 가져오기 (충분한 기간)
-    df = yf.download(ticker, interval="1wk", period="2y", progress=False)
-    
-    if df.empty:
-        st.error("데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.")
-        return None, None, None, None
+    try:
+        # 주봉 데이터 가져오기
+        df = yf.download(ticker, interval="1wk", period="2y", progress=False)
+        
+        if df.empty:
+            return None, None, None, None
 
-    # RSI 계산 (14주)
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).fillna(0)
-    loss = (-delta.where(delta < 0, 0)).fillna(0)
-    
-    avg_gain = gain.rolling(window=14).mean()
-    avg_loss = loss.rolling(window=14).mean()
-    
-    rs = avg_gain / avg_loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-    
-    # MDD 계산 (고점 대비 하락률)
-    # 현재 시점 기준 전고점 찾기 (최근 1년)
-    window = 52
-    df['Roll_Max'] = df['Close'].rolling(window=window, min_periods=1).max()
-    df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
-    
-    current_price = float(df['Close'].iloc[-1])
-    current_rsi = float(df['RSI'].iloc[-1])
-    current_dd = float(df['DD'].iloc[-1])
-    
-    return df, current_price, current_rsi, current_dd
+        # [Fix] yfinance 최신 버전 MultiIndex 처리 (Ticker 레벨 제거)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        # RSI 계산 (14주)
+        delta = df['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+        
+        # MDD 계산 (고점 대비 하락률)
+        window = 52
+        df['Roll_Max'] = df['Close'].rolling(window=window, min_periods=1).max()
+        df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
+        
+        # 최신 데이터 추출
+        current_price = float(df['Close'].iloc[-1])
+        current_rsi = float(df['RSI'].iloc[-1])
+        current_dd = float(df['DD'].iloc[-1])
+        
+        return df, current_price, current_rsi, current_dd
+        
+    except Exception as e:
+        st.error(f"데이터 처리 중 오류 발생: {e}")
+        return None, None, None, None
 
 def determine_phase(total_assets):
     """총 자산에 따른 Phase 결정"""
@@ -78,8 +85,15 @@ st.sidebar.subheader("잔고 현황")
 tqqq_balance = st.sidebar.number_input("TQQQ 평가금액 (현재 잔고)", min_value=0, value=100000000, step=1000000)
 cash_balance = st.sidebar.number_input("보유 현금 (RP/달러)", min_value=0, value=20000000, step=1000000)
 
-st.sidebar.subheader("수익률 확인용")
-total_principal = st.sidebar.number_input("총 원금 (투자 원금)", min_value=0, value=90000000, step=1000000, help="현재 손실 중인지 판단하기 위해 필요합니다.")
+st.sidebar.subheader("계좌 상태 확인")
+# [UI 개선] 총 원금 입력 제거 -> 라디오 버튼으로 변경
+status_option = st.sidebar.radio(
+    "현재 계좌 수익 상태",
+    ["🔴 수익 중 (Profit)", "🔵 손실 중 (Loss)"],
+    index=0,
+    help="손실 중일 경우 '절대 방패' 로직이 가동되어 매도가 금지됩니다."
+)
+is_loss = "손실" in status_option
 
 # 계산
 total_assets = tqqq_balance + cash_balance
@@ -90,13 +104,11 @@ target_cash_ratio = PHASE_CONFIG[current_phase]['target_cash']
 current_stock_ratio = tqqq_balance / total_assets if total_assets > 0 else 0
 current_cash_ratio = cash_balance / total_assets if total_assets > 0 else 0
 
-is_loss = total_assets < total_principal # 손실 여부
-
 # ==========================================
 # 4. 메인 화면: 대시보드 (Dashboard)
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown(f"**Ver 17.2 (Universal Logic)** | System Owner: **Busan Programmer**")
+st.markdown(f"**Ver 17.2.1 (Bug Fix)** | System Owner: **Busan Programmer**")
 
 # --- 시장 데이터 로딩 ---
 df, qqq_price, qqq_rsi, qqq_mdd = get_market_data()
@@ -111,9 +123,7 @@ if df is not None:
     
     with col2:
         rsi_color = "normal"
-        if qqq_rsi >= 80: rsi_color = "inverse" # Red
-        elif qqq_rsi < 60: rsi_color = "off" # Greenish concept
-        st.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}", delta=None)
+        st.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}")
         if qqq_rsi >= 80: st.error("🚨 광기 (Overbought)")
         elif qqq_rsi >= 75: st.warning("🔥 과열 (Warning)")
         elif qqq_rsi < 60: st.success("💰 기회 (Opportunity)")
@@ -131,15 +141,15 @@ if df is not None:
     
     p_col1, p_col2, p_col3, p_col4 = st.columns(4)
     p_col1.metric("현재 Phase", PHASE_CONFIG[current_phase]['name'])
-    p_col2.metric("총 자산", format_krw(total_assets), delta=format_krw(total_assets - total_principal))
+    p_col2.metric("총 자산", format_krw(total_assets))
     p_col3.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
     p_col4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
 
     # 손실 여부 표시
     if is_loss:
-        st.error(f"🛑 현재 계좌 손실 중 (-{total_principal - total_assets:,.0f}원) -> [절대 방패] 가동됨")
+        st.error(f"🛑 현재 계좌 [손실 중] 상태입니다. -> [절대 방패] 가동 (매도 금지)")
     else:
-        st.success(f"✅ 현재 계좌 수익 중 (+{total_assets - total_principal:,.0f}원)")
+        st.success(f"✅ 현재 계좌 [수익 중] 상태입니다. -> 정상 로직 가동")
 
     # 3. CRO 자동 판단 및 지시 (Decision Engine)
     st.markdown("---")
@@ -158,7 +168,6 @@ if df is not None:
         action_color = "red"
         
         # 손실 중일 때도 매수는 해야 하므로 아래 로직 체크 (단, 매도 신호는 무시)
-        # RSI 80 이상이면 매수도 금지
         if qqq_rsi >= 80:
             final_action = "🛑 COMPLETE STOP (관망)"
             detail_msg = "손실 중이라 매도할 수 없지만, RSI가 80 이상(광기)이므로 **매수도 금지**합니다. 현금을 모으십시오."
@@ -171,12 +180,14 @@ if df is not None:
             elif qqq_mdd <= -0.2: input_cash = cash_balance * 0.2
             final_action = f"📉 CRISIS BUY (위기 매수)"
             detail_msg = f"MDD {mdd_pct:.1f}% 돌파. 보유 현금의 일부({format_krw(input_cash)})를 즉시 투입하십시오."
+            action_color = "green"
             
         elif current_stock_ratio < (target_stock_ratio - 0.1):
             # 비중 미달 (손실 중이니 매수는 OK)
             buy_amt = (total_assets * target_stock_ratio) - tqqq_balance
             final_action = f"⚖️ REBALANCE BUY (비중 채우기)"
             detail_msg = f"TQQQ 비중이 {current_stock_ratio*100:.1f}%로 너무 낮습니다. {format_krw(buy_amt)} 매수하여 {target_stock_ratio*100}%를 맞추십시오."
+            action_color = "green"
         
         else:
             # 월급날 로직
@@ -187,12 +198,6 @@ if df is not None:
         # 목표 현금 + 10%p 만들기
         target_cash_panic = target_cash_ratio + 0.1
         target_cash_amt = total_assets * target_cash_panic
-        sell_amt = cash_balance - target_cash_amt # 현금이 목표보다 적으면 마이너스 -> 매도해야 함
-        
-        # sell_amt가 음수여야 현금이 부족한 것 -> 아님. 현금을 늘려야 하니까 TQQQ를 팔아야 함.
-        # 목표 현금 보유액: total_assets * 0.3 (Phase 1 기준)
-        # 현재 현금: cash_balance
-        # 필요 현금: target_cash_amt - cash_balance
         sell_needed = target_cash_amt - cash_balance
         
         if sell_needed > 0:
@@ -282,7 +287,7 @@ if df is not None:
                         open=df['Open'], high=df['High'],
                         low=df['Low'], close=df['Close'], name='QQQ'))
         
-        fig.update_layout(title='QQQ Weekly Chart', yaxis_title='Price')
+        fig.update_layout(title='QQQ Weekly Chart', yaxis_title='Price', height=500)
         st.plotly_chart(fig, use_container_width=True)
         
         # RSI 차트
@@ -290,7 +295,7 @@ if df is not None:
         fig_rsi.add_trace(go.Scatter(x=df.index, y=df['RSI'], name='RSI', line=dict(color='purple')))
         fig_rsi.add_hline(y=80, line_dash="dash", line_color="red", annotation_text="Overbought (80)")
         fig_rsi.add_hline(y=60, line_dash="dash", line_color="green", annotation_text="Opportunity (60)")
-        fig_rsi.update_layout(title='QQQ Weekly RSI', yaxis_title='RSI', yaxis_range=[0, 100])
+        fig_rsi.update_layout(title='QQQ Weekly RSI', yaxis_title='RSI', yaxis_range=[0, 100], height=300)
         st.plotly_chart(fig_rsi, use_container_width=True)
 
 else:
