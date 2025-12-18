@@ -1,0 +1,17 @@
+name: Test Telegram Alert
+
+on:
+  workflow_dispatch: # 수동 실행 버튼
+
+jobs:
+  test_connection:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Test Message
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage \
+          -d chat_id=$CHAT_ID \
+          -d text="✅ [CRO 시스템 점검] 통신 상태 양호. 24시간 감시를 시작합니다."
