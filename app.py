@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 # ==========================================
 # 1. 설정 및 상수 정의 (Configuration)
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V17.3", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V17.4", layout="wide", page_icon="🔥")
 
 # Phase별 목표 비중 정의
 PHASE_CONFIG = {
@@ -82,7 +82,7 @@ def format_krw(value):
 # 3. 메인 로직 및 UI
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown(f"**Ver 17.3 (Auto Exchange Rate)** | System Owner: **Busan Programmer**")
+st.markdown(f"**Ver 17.4 (Dual Account Support)** | System Owner: **Busan Programmer**")
 
 # 데이터 로딩
 df, qqq_price, qqq_rsi, qqq_mdd, usd_krw_rate = get_market_data()
@@ -90,38 +90,44 @@ df, qqq_price, qqq_rsi, qqq_mdd, usd_krw_rate = get_market_data()
 if df is not None:
     # --- 사이드바 (입력) ---
     st.sidebar.header("📝 자산 정보 입력")
-    st.sidebar.info(f"💵 현재 환율 적용: **1달러 = {int(usd_krw_rate):,}원**")
+    st.sidebar.info(f"💵 현재 환율: **1달러 = {int(usd_krw_rate):,}원**")
+    
+    monthly_contribution = st.sidebar.number_input("이번 달 투입금 (월급)", min_value=0, value=5000000, step=100000)
     st.sidebar.markdown("---")
 
-    monthly_contribution = st.sidebar.number_input("월 적립금 (원화)", min_value=0, value=5000000, step=100000)
-    
-    st.sidebar.subheader("1. 주식 잔고")
-    tqqq_balance_krw = st.sidebar.number_input("TQQQ 평가금액 (원화 환산액)", min_value=0, value=100000000, step=1000000, help="MTS에 표시되는 원화 평가금액을 입력하세요.")
-    
-    st.sidebar.subheader("2. 현금 잔고")
-    cash_krw = st.sidebar.number_input("보유 원화 (KRW)", min_value=0, value=1000000, step=100000)
-    cash_usd = st.sidebar.number_input("보유 달러 (USD)", min_value=0, value=15000, step=100)
-    
-    # 현금 합산 (환율 적용)
-    total_cash_krw = cash_krw + (cash_usd * usd_krw_rate)
-    
-    st.sidebar.subheader("3. 계좌 상태")
+    # [계좌 A] 입력
+    with st.sidebar.expander("🏦 계좌 A: 금고 (장기보유)", expanded=True):
+        st.caption("절대 팔지 않는 계좌 (평단가 낮음)")
+        a_tqqq = st.number_input("A: TQQQ 평가금", min_value=0, value=80000000, step=1000000)
+        a_cash_krw = st.number_input("A: 원화 예수금", min_value=0, value=0, step=100000)
+        a_cash_usd = st.number_input("A: 달러 예수금", min_value=0, value=0, step=100)
+
+    # [계좌 B] 입력
+    with st.sidebar.expander("⚔️ 계좌 B: 스나이퍼 (매매용)", expanded=True):
+        st.caption("리밸런싱 및 트레이딩 계좌 (평단가 높음)")
+        b_tqqq = st.number_input("B: TQQQ 평가금", min_value=0, value=20000000, step=1000000)
+        b_cash_krw = st.number_input("B: 원화 예수금", min_value=0, value=1000000, step=100000)
+        b_cash_usd = st.number_input("B: 달러 예수금", min_value=0, value=15000, step=100)
+
+    st.sidebar.markdown("---")
     status_option = st.sidebar.radio(
-        "수익/손실 여부",
+        "전체 계좌 수익 상태",
         ["🔴 수익 중 (Profit)", "🔵 손실 중 (Loss)"],
         index=0
     )
     is_loss = "손실" in status_option
 
-    # 총 자산 계산
-    total_assets = tqqq_balance_krw + total_cash_krw
+    # --- 내부 자동 합산 로직 ---
+    total_tqqq_krw = a_tqqq + b_tqqq
+    total_cash_krw = (a_cash_krw + b_cash_krw) + ((a_cash_usd + b_cash_usd) * usd_krw_rate)
+    total_assets = total_tqqq_krw + total_cash_krw
     
     # Phase 및 비중 계산
     current_phase = determine_phase(total_assets)
     target_stock_ratio = PHASE_CONFIG[current_phase]['target_stock']
     target_cash_ratio = PHASE_CONFIG[current_phase]['target_cash']
     
-    current_stock_ratio = tqqq_balance_krw / total_assets if total_assets > 0 else 0
+    current_stock_ratio = total_tqqq_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
 
     # --- 메인 대시보드 ---
@@ -146,11 +152,13 @@ if df is not None:
     st.header("2. 포트폴리오 진단 (Diagnosis)")
     p1, p2, p3, p4 = st.columns(4)
     p1.metric("현재 Phase", PHASE_CONFIG[current_phase]['name'])
-    p2.metric("총 자산 (KRW)", format_krw(total_assets))
+    p2.metric("총 자산 (합산)", format_krw(total_assets))
     p3.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
     p4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
     
-    st.caption(f"ℹ️ 현금 상세: 원화 {format_krw(cash_krw)} + 달러 ${cash_usd:,.2f} (환산 {format_krw(cash_usd * usd_krw_rate)})")
+    # 계좌별 현황 표시
+    st.caption(f"🏦 A계좌(금고): TQQQ {format_krw(a_tqqq)} / 현금 {format_krw(a_cash_krw + a_cash_usd*usd_krw_rate)}")
+    st.caption(f"⚔️ B계좌(매매): TQQQ {format_krw(b_tqqq)} / 현금 {format_krw(b_cash_krw + b_cash_usd*usd_krw_rate)}")
 
     if is_loss:
         st.error("🛑 [손실 중] 절대 방패 가동: 매도 금지")
@@ -164,8 +172,9 @@ if df is not None:
     final_action = ""
     detail_msg = ""
     action_color = "blue"
+    trade_account_msg = "👉 **거래는 [B계좌: 스나이퍼]에서 수행하십시오.**"
 
-    # --- Logic Engine V17.3 ---
+    # --- Logic Engine V17.4 ---
     
     if is_loss:
         final_action = "🛑 HOLD (매도 금지)"
@@ -184,7 +193,7 @@ if df is not None:
             detail_msg = f"MDD {mdd_pct:.1f}% 위기. 현금의 일부({format_krw(input_cash)})를 투입하십시오."
             action_color = "green"
         elif current_stock_ratio < (target_stock_ratio - 0.1):
-            buy_amt = (total_assets * target_stock_ratio) - tqqq_balance_krw
+            buy_amt = (total_assets * target_stock_ratio) - total_tqqq_krw
             final_action = "⚖️ REBALANCE BUY (비중 채우기)"
             detail_msg = f"비중 미달. {format_krw(buy_amt)} 매수하여 {target_stock_ratio*100}%를 맞추십시오."
             action_color = "green"
@@ -216,13 +225,13 @@ if df is not None:
         action_color = "green"
 
     elif current_stock_ratio > (target_stock_ratio + 0.1):
-        sell_amt = tqqq_balance_krw - (total_assets * target_stock_ratio)
+        sell_amt = total_tqqq_krw - (total_assets * target_stock_ratio)
         final_action = "⚖️ REBALANCE SELL (과열 방지)"
         detail_msg = f"비중 초과. {format_krw(sell_amt)} 매도하여 {target_stock_ratio*100}% 복귀."
         action_color = "orange"
         
     elif current_stock_ratio < (target_stock_ratio - 0.1):
-        buy_amt = (total_assets * target_stock_ratio) - tqqq_balance_krw
+        buy_amt = (total_assets * target_stock_ratio) - total_tqqq_krw
         final_action = "⚖️ REBALANCE BUY (저점 매수)"
         detail_msg = f"비중 미달. {format_krw(buy_amt)} 매수하여 {target_stock_ratio*100}% 복귀."
         action_color = "green"
@@ -245,10 +254,18 @@ if df is not None:
                 detail_msg = f"기회(RSI<60) + 현금부족. 쥐어짜기({squeeze_ratio*100:.0f}%): {format_krw(buy_amount)} 매수."
 
     st.info(f"💡 **판단:** {final_action}")
+    
+    # 메시지 출력
     if action_color == "red": st.error(detail_msg)
     elif action_color == "green": st.success(detail_msg)
     elif action_color == "orange": st.warning(detail_msg)
     else: st.info(detail_msg)
+    
+    # 매매 계좌 안내
+    if "매도" in final_action or "SELL" in final_action:
+        st.markdown(f"🔥 {trade_account_msg} (세금 절약)")
+    elif "매수" in final_action or "BUY" in final_action:
+         st.markdown(f"💰 **매수는 [A계좌: 금고]에 우선 적립하되, 단기 자금은 [B계좌]를 이용하십시오.**")
     
     # 차트 (생략 없이 동일하게 유지)
     st.markdown("---")
