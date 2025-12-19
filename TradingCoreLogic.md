@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 18.0)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.0)
 **"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -8,7 +8,7 @@
 ---
 
 ## 1. 시스템 아키텍처 (System Architecture)
-*Ver 18.0 필수 패치: 3-Core 계좌 운용*
+*Ver 19.0 필수 패치: 3-Core 계좌 운용*
 
 | 계좌명 | 별칭 | 용도 및 규칙 |
 | :--- | :--- | :--- |

@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V18.0", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.0", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -100,7 +100,8 @@ def calculate_indicators(df):
 
 def get_market_data():
     try:
-        # QQQ (주봉/월봉)
+        # QQQ (일봉/주봉/월봉)
+        qqq_dy = yf.download("QQQ", interval="1d", period="1y", progress=False)
         qqq_wk = yf.download("QQQ", interval="1wk", period="2y", progress=False)
         qqq_mo = yf.download("QQQ", interval="1mo", period="5y", progress=False)
         
@@ -108,29 +109,47 @@ def get_market_data():
         tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False)
         tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False)
         
+        # 매크로 지표 (VIX, 10년물 국채)
+        vix = yf.download("^VIX", period="1d", progress=False)
+        tnx = yf.download("^TNX", period="1d", progress=False)
+        
         # 환율
         exch = yf.download("KRW=X", period="1d", progress=False)
         
         if qqq_wk.empty or exch.empty or tqqq_wk.empty: return None
 
         # MultiIndex 정리
-        for d in [qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch]:
+        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch, vix, tnx]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
         
-        # QQQ 지표
+        # QQQ 지표 & 이동평균선
         qqq_price = float(qqq_wk['Close'].iloc[-1])
-        qqq_rsi_wk, qqq_mdd = calculate_indicators(qqq_wk)
-        qqq_rsi_mo, _ = calculate_indicators(qqq_mo)
+        
+        # MA 계산 (일/주/월)
+        for d in [qqq_dy, qqq_wk, qqq_mo]:
+            d['MA20'] = d['Close'].rolling(window=20).mean()
+            d['MA60'] = d['Close'].rolling(window=60).mean()
+            calculate_indicators(d) # RSI, MDD 계산
+
+        qqq_rsi_wk = float(qqq_wk['RSI'].iloc[-1])
+        qqq_mdd = float(qqq_wk['DD'].iloc[-1])
+        qqq_rsi_mo = float(qqq_mo['RSI'].iloc[-1])
         
         # TQQQ 지표
         tqqq_price = float(tqqq_wk['Close'].iloc[-1])
         tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
         tqqq_rsi_mo, _ = calculate_indicators(tqqq_mo)
         
+        # 매크로 데이터
+        vix_val = float(vix['Close'].iloc[-1]) if not vix.empty else 0
+        tnx_val = float(tnx['Close'].iloc[-1]) if not tnx.empty else 0
+        
         return {
-            'qqq_df': qqq_wk,
+            'qqq_dy': qqq_dy,
+            'qqq_wk': qqq_wk,
+            'qqq_mo': qqq_mo,
             'qqq_price': qqq_price,
             'qqq_rsi_wk': qqq_rsi_wk,
             'qqq_rsi_mo': qqq_rsi_mo,
@@ -139,7 +158,9 @@ def get_market_data():
             'tqqq_rsi_wk': tqqq_rsi_wk,
             'tqqq_rsi_mo': tqqq_rsi_mo,
             'tqqq_mdd': tqqq_mdd,
-            'usd_krw': current_rate
+            'usd_krw': current_rate,
+            'vix': vix_val,
+            'tnx': tnx_val
         }
     except Exception as e:
         return None
@@ -156,7 +177,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 18.0 (Ultimate Logic)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 19.0 (Institutional Grade)** | System Owner: **Busan Programmer**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -178,7 +199,11 @@ if mkt is not None:
     usd_krw_rate = mkt['usd_krw']
     qqq_rsi = mkt['qqq_rsi_wk']
     qqq_mdd = mkt['qqq_mdd']
-    df = mkt['qqq_df'] # 차트용
+    
+    # 차트용 데이터
+    df_dy = mkt['qqq_dy']
+    df_wk = mkt['qqq_wk']
+    df_mo = mkt['qqq_mo']
 
     tqqq_krw = tqqq_price * usd_krw_rate  # TQQQ 현재가 (원화)
 
@@ -281,6 +306,20 @@ if mkt is not None:
     t2.metric("TQQQ 월봉 RSI", f"{mkt['tqqq_rsi_mo']:.1f}", "Month Trend")
     t3.metric("TQQQ 주봉 RSI", f"{mkt['tqqq_rsi_wk']:.1f}", get_rsi_status(mkt['tqqq_rsi_wk']))
     t4.metric("TQQQ MDD", f"{mkt['tqqq_mdd']*100:.2f}%", get_mdd_status(mkt['tqqq_mdd']))
+
+    # Macro Info (V19.0)
+    m1, m2, m3, m4 = st.columns(4)
+    
+    vix = mkt['vix']
+    vix_label = "안정 (Low Fear)" if vix < 20 else ("🚨 공포 (Panic)" if vix > 30 else "주의 (Caution)")
+    m1.metric("VIX (공포지수)", f"{vix:.2f}", vix_label)
+    
+    tnx = mkt['tnx']
+    tnx_label = "양호" if tnx < 4.0 else "⚠️ 고금리 주의"
+    m2.metric("US 10Y (국채금리)", f"{tnx:.2f}%", tnx_label)
+    
+    m3.empty() # Spacer
+    m4.empty() # Spacer
 
     # --- 2. 포트폴리오 진단 ---
     st.markdown("---")
@@ -444,22 +483,51 @@ if mkt is not None:
 
     # --- 4. 차트 ---
     st.markdown("---")
-    with st.expander("📊 차트 확인 (QQQ & RSI)", expanded=True):
-        fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'])])
-        fig.update_layout(title='QQQ Weekly', height=350, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig, use_container_width=True)
+    with st.expander("📊 차트 확인 (Daily / Weekly / Monthly)", expanded=True):
+        tab1, tab2, tab3 = st.tabs(["일봉 (Daily)", "주봉 (Weekly)", "월봉 (Monthly)"])
         
-        fig_rsi = go.Figure(data=[go.Scatter(x=df.index, y=df['RSI'], line=dict(color='purple'))])
-        fig_rsi.add_hline(y=80, line_color="red", line_dash="dash")
-        fig_rsi.add_hline(y=60, line_color="green", line_dash="dash")
-        fig_rsi.update_layout(title='RSI', height=250, yaxis_range=[0, 100], margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_rsi, use_container_width=True)
+        def draw_chart(df, title):
+            fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Candle')])
+            
+            # 이동평균선
+            fig.add_trace(go.Scatter(x=df.index, y=df['MA20'], line=dict(color='orange', width=1), name='MA 20'))
+            fig.add_trace(go.Scatter(x=df.index, y=df['MA60'], line=dict(color='blue', width=1), name='MA 60'))
+            
+            fig.update_layout(title=title, height=400, margin=dict(l=20, r=20, t=40, b=20), xaxis_rangeslider_visible=False)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # RSI 차트
+            fig_rsi = go.Figure(data=[go.Scatter(x=df.index, y=df['RSI'], line=dict(color='purple'))])
+            fig_rsi.add_hline(y=80, line_color="red", line_dash="dash")
+            fig_rsi.add_hline(y=60, line_color="green", line_dash="dash")
+            fig_rsi.update_layout(title=f'{title} - RSI', height=200, yaxis_range=[0, 100], margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_rsi, use_container_width=True)
+
+        with tab1:
+            draw_chart(df_dy, "QQQ Daily Chart")
+        
+        with tab2:
+            draw_chart(df_wk, "QQQ Weekly Chart")
+            
+        with tab3:
+            draw_chart(df_mo, "QQQ Monthly Chart")
 
     # --- 5. 릴리즈 노트 (Update History) ---
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
-        ### Ver 18.0 (Current) - The Ultimate Logic
+        ### Ver 19.0 (Current) - Institutional Grade (Hedge Fund Edition)
+        - **🌍 매크로 대시보드 (Macro Dashboard)**:
+            - **VIX (공포지수)**: 시장의 공포/탐욕 단계(안정/주의/공포)를 실시간 모니터링.
+            - **US 10Y (국채금리)**: 기술주의 최대 적, 금리 동향을 한눈에 파악.
+            - 단순 개별 종목 분석을 넘어 '거시 경제(Macro)' 흐름을 읽는 기관급 기능 탑재.
+        - **📊 멀티 타임프레임 차트 (Multi-Timeframe Analysis)**:
+            - **[일봉] | [주봉] | [월봉]** 탭 분리로 단기/중기/장기 추세 입체적 분석 가능.
+        - **📈 고급 기술적 분석 (Advanced Techincal)**:
+            - **이동평균선 (MA)**: MA20(생명선), MA60(수급선) 자동 오버레이.
+            - 추세의 정배열/역배열 상태를 시각적으로 즉시 판별.
+
+        ### Ver 18.0 - The Ultimate Logic
         - **📉 MDD 대응 로직 세분화 (Precision Strike)**:
             - 기존 3단계(-20, -30, -50%)에서 **4단계(-20, -30, -40, -50%)**로 확장.
             - **-40% (금융위기)** 구간 신설: 현금 30% 추가 투입으로 하락장 평단가 관리 강화.
