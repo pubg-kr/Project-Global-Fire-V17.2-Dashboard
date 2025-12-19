@@ -1,0 +1,27 @@
+# 가상환경 폴더
+test/
+
+# Python 관련
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 환경 변수
+.env
+.venv
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 데이터 파일
+*.json
+!requirements.txt
+
+app17-6.py

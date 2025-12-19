@@ -19,7 +19,8 @@ def load_data():
         "a_cash_usd": 0,
         "b_tqqq": 20000000,
         "b_cash_krw": 1000000,
-        "b_cash_usd": 15000
+        "b_cash_usd": 15000,
+        "c_cash_krw": 0
     }
     if os.path.exists(DATA_FILE):
         try:
@@ -38,7 +39,8 @@ def save_data():
         "a_cash_usd": st.session_state.a_cash_usd,
         "b_tqqq": st.session_state.b_tqqq,
         "b_cash_krw": st.session_state.b_cash_krw,
-        "b_cash_usd": st.session_state.b_cash_usd
+        "b_cash_usd": st.session_state.b_cash_usd,
+        "c_cash_krw": st.session_state.c_cash_krw
     }
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
@@ -46,7 +48,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V17.7", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V17.8", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -107,7 +109,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 17.7 (Local Persistence)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 17.8 (Tax Shield)** | System Owner: **Busan Programmer**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -155,6 +157,11 @@ if df is not None:
         st.number_input("B: 달러 예수금", min_value=0, step=100, key="b_cash_usd", on_change=save_data, format="%d")
         st.caption(f"👉 ${st.session_state.b_cash_usd:,.2f}")
 
+    # C계좌 (V17.3 추가)
+    with st.sidebar.expander("🛡️ 계좌 C: 벙커 (세금/비상)", expanded=True):
+        st.number_input("C: 원화 예수금 (수익금 22%)", min_value=0, step=100000, key="c_cash_krw", on_change=save_data, format="%d")
+        st.caption(f"👉 {format_krw(st.session_state.c_cash_krw)}")
+
     st.sidebar.markdown("---")
     status_option = st.sidebar.radio("계좌 상태", ["🔴 수익 중 (Profit)", "🔵 손실 중 (Loss)"], index=0)
     is_loss = "손실" in status_option
@@ -162,7 +169,7 @@ if df is not None:
     # --- 계산 로직 ---
     # Session State 값을 사용하여 계산
     total_tqqq_krw = st.session_state.a_tqqq + st.session_state.b_tqqq
-    total_cash_krw = (st.session_state.a_cash_krw + st.session_state.b_cash_krw) + \
+    total_cash_krw = (st.session_state.a_cash_krw + st.session_state.b_cash_krw + st.session_state.c_cash_krw) + \
                      ((st.session_state.a_cash_usd + st.session_state.b_cash_usd) * usd_krw_rate)
     total_assets = total_tqqq_krw + total_cash_krw
     
@@ -253,7 +260,7 @@ if df is not None:
         sell_needed = target_cash_amt - total_cash_krw
         if sell_needed > 0:
             final_action = "🚨 PANIC SELL (광기 매도)"
-            detail_msg = f"RSI 80 돌파. {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보."
+            detail_msg = f"RSI 80 돌파. {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
             action_color = "red"
         else:
             final_action = "✅ HOLD (현금 충분)"
@@ -272,7 +279,7 @@ if df is not None:
     elif current_stock_ratio > (target_stock_ratio + 0.1):
         sell_amt = total_tqqq_krw - (total_assets * target_stock_ratio)
         final_action = "⚖️ REBALANCE SELL (과열 방지)"
-        detail_msg = f"비중 초과. {format_krw(sell_amt)} 매도."
+        detail_msg = f"비중 초과. {format_krw(sell_amt)} 매도.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
         action_color = "orange"
         
     elif current_stock_ratio < (target_stock_ratio - 0.1):
@@ -328,6 +335,39 @@ if df is not None:
         fig_rsi.add_hline(y=60, line_color="green", line_dash="dash")
         fig_rsi.update_layout(title='RSI', height=250, yaxis_range=[0, 100], margin=dict(l=20, r=20, t=40, b=20))
         st.plotly_chart(fig_rsi, use_container_width=True)
+
+    # --- 5. 릴리즈 노트 (Update History) ---
+    st.markdown("---")
+    with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
+        st.markdown("""
+        ### Ver 17.8 (Current) - The Tax Shield
+        - **🛡️ 계좌 C (The Bunker) 신설**: 세금 및 비상금 격리용 계좌 추가 (수익금의 22% 자동 이체 규칙).
+        - **🧾 Tax Shield 로직 탑재**: 광기 매도/리밸런싱 매도 시 세금 격리(22%) 알림 메시지 출력.
+        - **🧮 자산 로직 고도화**: 총 자산 계산에 계좌 C 포함하여 Phase 판단 정확도 향상.
+        - **📝 릴리즈 노트 추가**: 앱 내에서 업데이트 내역 확인 기능 추가.
+
+        ### Ver 17.7 (Local Persistence)
+        - **💾 데이터 영구 저장**: 브라우저를 닫아도 자산 데이터가 유지되도록 로컬 저장소(JSON) 연동.
+        - **⚡ 속도 개선**: 데이터 로딩 최적화.
+
+        ### Ver 17.6
+        - 🛠️ **안정화 패치**: V17.5 이슈 롤백 및 로직 검증.
+        - 📖 **사용 가이드**: 업데이트 사용 가이드 문서화.
+
+        ### Ver 17.5
+        - ✨ **기능 개선**: 사용자 피드백 반영 및 UI 가독성 패치.
+
+        ### Ver 17.4 - The Dual Account
+        - **🏦 2계좌 전략 (Two-Account Strategy) 도입**:
+            - **계좌 A (The Vault)**: 무한 적립 전용 (매도 금지).
+            - **계좌 B (The Sniper)**: 트레이딩 및 리밸런싱 전용.
+        - 세금 문제 회피 및 매매 효율성 증대.
+
+        ### 초기 버전 (Early Access)
+        - **🔔 텔레그램 알림**: 위기 상황(MDD) 발생 시 알림 봇 기능 추가.
+        - **💱 환율 연동**: 달러/원화 자동 환산 및 통합 자산 계산.
+        - **📊 차트 시각화**: QQQ 주봉, RSI, MDD 동적 차트 구현.
+        """)
 
 else:
     st.warning("데이터 로딩 중... (잠시만 기다려주세요)")
