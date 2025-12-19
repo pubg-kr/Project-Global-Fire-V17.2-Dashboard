@@ -14,10 +14,12 @@ def load_data():
     """JSON 파일에서 데이터 로드, 없으면 기본값 반환"""
     default_data = {
         "monthly_contribution": 5000000,
-        "a_tqqq": 80000000,
+        "a_tqqq_qty": 1000.0,
+        "a_tqqq_avg": 80000,
         "a_cash_krw": 0,
         "a_cash_usd": 0,
-        "b_tqqq": 20000000,
+        "b_tqqq_qty": 200.0,
+        "b_tqqq_avg": 85000,
         "b_cash_krw": 1000000,
         "b_cash_usd": 15000,
         "c_cash_krw": 0
@@ -25,7 +27,12 @@ def load_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r") as f:
-                return json.load(f)
+                loaded = json.load(f)
+                # 마이그레이션: 구버전 데이터가 있으면 기본값으로 병합
+                for k, v in default_data.items():
+                    if k not in loaded:
+                        loaded[k] = v
+                return loaded
         except:
             return default_data
     return default_data
@@ -34,10 +41,12 @@ def save_data():
     """현재 Session State 값을 JSON으로 저장"""
     data = {
         "monthly_contribution": st.session_state.monthly_contribution,
-        "a_tqqq": st.session_state.a_tqqq,
+        "a_tqqq_qty": st.session_state.a_tqqq_qty,
+        "a_tqqq_avg": st.session_state.a_tqqq_avg,
         "a_cash_krw": st.session_state.a_cash_krw,
         "a_cash_usd": st.session_state.a_cash_usd,
-        "b_tqqq": st.session_state.b_tqqq,
+        "b_tqqq_qty": st.session_state.b_tqqq_qty,
+        "b_tqqq_avg": st.session_state.b_tqqq_avg,
         "b_cash_krw": st.session_state.b_cash_krw,
         "b_cash_usd": st.session_state.b_cash_usd,
         "c_cash_krw": st.session_state.c_cash_krw
@@ -48,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V17.8", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V17.9", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -69,33 +78,71 @@ PROTOCOL_TEXT = """
 # ==========================================
 # 2. 유틸리티 함수
 # ==========================================
+def calculate_indicators(df):
+    """데이터프레임(주/월봉)을 받아 RSI와 MDD를 계산하여 반환"""
+    if df.empty: return 0, 0
+    
+    # RSI 계산
+    delta = df['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(window=14).mean()
+    avg_loss = loss.rolling(window=14).mean()
+    rs = avg_gain / avg_loss
+    df['RSI'] = 100 - (100 / (1 + rs))
+    
+    # MDD 계산 (1년/52주 기준)
+    window = 52 if len(df) >= 52 else len(df)
+    df['Roll_Max'] = df['Close'].rolling(window=window, min_periods=1).max()
+    df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
+    
+    return float(df['RSI'].iloc[-1]), float(df['DD'].iloc[-1])
+
 def get_market_data():
     try:
-        df = yf.download("QQQ", interval="1wk", period="2y", progress=False)
+        # QQQ (주봉/월봉)
+        qqq_wk = yf.download("QQQ", interval="1wk", period="2y", progress=False)
+        qqq_mo = yf.download("QQQ", interval="1mo", period="5y", progress=False)
+        
+        # TQQQ (주봉/월봉)
+        tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False)
+        tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False)
+        
+        # 환율
         exch = yf.download("KRW=X", period="1d", progress=False)
         
-        if df.empty or exch.empty: return None, None, None, None, None
+        if qqq_wk.empty or exch.empty or tqqq_wk.empty: return None
 
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
-        if isinstance(exch.columns, pd.MultiIndex): exch.columns = exch.columns.get_level_values(0)
+        # MultiIndex 정리
+        for d in [qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch]:
+            if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
-
-        delta = df['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).fillna(0)
-        loss = (-delta.where(delta < 0, 0)).fillna(0)
-        avg_gain = gain.rolling(window=14).mean()
-        avg_loss = loss.rolling(window=14).mean()
-        rs = avg_gain / avg_loss
-        df['RSI'] = 100 - (100 / (1 + rs))
         
-        window = 52
-        df['Roll_Max'] = df['Close'].rolling(window=window, min_periods=1).max()
-        df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
+        # QQQ 지표
+        qqq_price = float(qqq_wk['Close'].iloc[-1])
+        qqq_rsi_wk, qqq_mdd = calculate_indicators(qqq_wk)
+        qqq_rsi_mo, _ = calculate_indicators(qqq_mo)
         
-        return df, float(df['Close'].iloc[-1]), float(df['RSI'].iloc[-1]), float(df['DD'].iloc[-1]), current_rate
-    except:
-        return None, None, None, None, None
+        # TQQQ 지표
+        tqqq_price = float(tqqq_wk['Close'].iloc[-1])
+        tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
+        tqqq_rsi_mo, _ = calculate_indicators(tqqq_mo)
+        
+        return {
+            'qqq_df': qqq_wk,
+            'qqq_price': qqq_price,
+            'qqq_rsi_wk': qqq_rsi_wk,
+            'qqq_rsi_mo': qqq_rsi_mo,
+            'qqq_mdd': qqq_mdd,
+            'tqqq_price': tqqq_price,
+            'tqqq_rsi_wk': tqqq_rsi_wk,
+            'tqqq_rsi_mo': tqqq_rsi_mo,
+            'tqqq_mdd': tqqq_mdd,
+            'usd_krw': current_rate
+        }
+    except Exception as e:
+        return None
 
 def determine_phase(total_assets):
     for p in range(1, 6):
@@ -109,7 +156,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 17.8 (Tax Shield)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 17.9 (Deep Analytics & UI Reform)** | System Owner: **Busan Programmer**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -122,9 +169,19 @@ if "monthly_contribution" not in st.session_state:
 with st.expander("📜 Master Protocol (규정집)", expanded=False):
     st.markdown(PROTOCOL_TEXT)
 
-df, qqq_price, qqq_rsi, qqq_mdd, usd_krw_rate = get_market_data()
+mkt = get_market_data()
 
-if df is not None:
+if mkt is not None:
+    # 데이터 매핑
+    qqq_price = mkt['qqq_price']
+    tqqq_price = mkt['tqqq_price']
+    usd_krw_rate = mkt['usd_krw']
+    qqq_rsi = mkt['qqq_rsi_wk']
+    qqq_mdd = mkt['qqq_mdd']
+    df = mkt['qqq_df'] # 차트용
+
+    tqqq_krw = tqqq_price * usd_krw_rate  # TQQQ 현재가 (원화)
+
     # --- 사이드바 (자동 저장 적용) ---
     st.sidebar.header("📝 자산 정보 (자동 저장됨)")
     st.sidebar.info(f"💵 환율: **{int(usd_krw_rate):,}원/$**")
@@ -137,8 +194,12 @@ if df is not None:
     
     # A계좌
     with st.sidebar.expander("🏦 계좌 A: 금고 (장기)", expanded=True):
-        st.number_input("A: TQQQ 평가금", min_value=0, step=1000000, key="a_tqqq", on_change=save_data, format="%d")
-        st.caption(f"👉 {format_krw(st.session_state.a_tqqq)}")
+        st.number_input("A: TQQQ 보유 수량", min_value=0.0, step=0.01, key="a_tqqq_qty", on_change=save_data, format="%.2f")
+        st.number_input("A: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="a_tqqq_avg", on_change=save_data, format="%d")
+        
+        # A계좌 평가금 자동 계산
+        a_tqqq_eval = st.session_state.a_tqqq_qty * tqqq_krw
+        st.caption(f"📊 평가금: **{format_krw(a_tqqq_eval)}**")
         
         st.number_input("A: 원화 예수금", min_value=0, step=100000, key="a_cash_krw", on_change=save_data, format="%d")
         st.caption(f"👉 {format_krw(st.session_state.a_cash_krw)}")
@@ -148,8 +209,12 @@ if df is not None:
 
     # B계좌
     with st.sidebar.expander("⚔️ 계좌 B: 스나이퍼 (매매)", expanded=True):
-        st.number_input("B: TQQQ 평가금", min_value=0, step=1000000, key="b_tqqq", on_change=save_data, format="%d")
-        st.caption(f"👉 {format_krw(st.session_state.b_tqqq)}")
+        st.number_input("B: TQQQ 보유 수량", min_value=0.0, step=0.01, key="b_tqqq_qty", on_change=save_data, format="%.2f")
+        st.number_input("B: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="b_tqqq_avg", on_change=save_data, format="%d")
+        
+        # B계좌 평가금 자동 계산
+        b_tqqq_eval = st.session_state.b_tqqq_qty * tqqq_krw
+        st.caption(f"📊 평가금: **{format_krw(b_tqqq_eval)}**")
         
         st.number_input("B: 원화 예수금", min_value=0, step=100000, key="b_cash_krw", on_change=save_data, format="%d")
         st.caption(f"👉 {format_krw(st.session_state.b_cash_krw)}")
@@ -163,12 +228,22 @@ if df is not None:
         st.caption(f"👉 {format_krw(st.session_state.c_cash_krw)}")
 
     st.sidebar.markdown("---")
-    status_option = st.sidebar.radio("계좌 상태", ["🔴 수익 중 (Profit)", "🔵 손실 중 (Loss)"], index=0)
-    is_loss = "손실" in status_option
+    
+    # --- 자동 손익 판단 로직 ---
+    total_qty = st.session_state.a_tqqq_qty + st.session_state.b_tqqq_qty
+    total_invested_krw = (st.session_state.a_tqqq_qty * st.session_state.a_tqqq_avg) + \
+                         (st.session_state.b_tqqq_qty * st.session_state.b_tqqq_avg)
+    
+    avg_price_krw = total_invested_krw / total_qty if total_qty > 0 else 0
+    is_loss = tqqq_krw < avg_price_krw if total_qty > 0 else False
+    
+    profit_rate = 0.0
+    if total_qty > 0:
+        profit_rate = ((tqqq_krw - avg_price_krw) / avg_price_krw) * 100
 
     # --- 계산 로직 ---
     # Session State 값을 사용하여 계산
-    total_tqqq_krw = st.session_state.a_tqqq + st.session_state.b_tqqq
+    total_tqqq_krw = a_tqqq_eval + b_tqqq_eval # 자동 계산된 값 사용
     total_cash_krw = (st.session_state.a_cash_krw + st.session_state.b_cash_krw + st.session_state.c_cash_krw) + \
                      ((st.session_state.a_cash_usd + st.session_state.b_cash_usd) * usd_krw_rate)
     total_assets = total_tqqq_krw + total_cash_krw
@@ -182,20 +257,30 @@ if df is not None:
 
     # --- 1. 시장 상황판 ---
     st.header("1. 시장 상황판 (Market Status)")
-    col1, col2, col3 = st.columns(3)
     
-    qqq_krw = qqq_price * usd_krw_rate
-    col1.metric("QQQ 현재가", f"${qqq_price:.2f}", f"({format_krw(qqq_krw)})")
+    # Helper for labels
+    def get_rsi_status(rsi):
+        if rsi >= 80: return "🚨 광기"
+        elif rsi >= 75: return "🔥 과열"
+        elif rsi < 60: return "💰 기회"
+        return "표준"
+
+    def get_mdd_status(mdd):
+        return "📉 위기" if mdd <= -0.2 else "✅ 안정"
+
+    # QQQ Info
+    q1, q2, q3, q4 = st.columns(4)
+    q1.metric("QQQ 현재가", f"${qqq_price:.2f} ({format_krw(qqq_price*usd_krw_rate)})")
+    q2.metric("QQQ 월봉 RSI", f"{mkt['qqq_rsi_mo']:.1f}", "Month Trend")
+    q3.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}", get_rsi_status(qqq_rsi))
+    q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_status(qqq_mdd))
     
-    rsi_label = "표준 (Neutral)"
-    if qqq_rsi >= 80: rsi_label = "🚨 광기 (Overbought)"
-    elif qqq_rsi >= 75: rsi_label = "🔥 과열 (Warning)"
-    elif qqq_rsi < 60: rsi_label = "💰 기회 (Opportunity)"
-    col2.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}", rsi_label)
-    
-    mdd_pct = qqq_mdd * 100
-    mdd_label = "📉 위기 (Crisis)" if mdd_pct <= -20 else "✅ 안정 (Stable)"
-    col3.metric("QQQ MDD", f"{mdd_pct:.2f}%", mdd_label)
+    # TQQQ Info
+    t1, t2, t3, t4 = st.columns(4)
+    t1.metric("TQQQ 현재가", f"${tqqq_price:.2f} ({format_krw(tqqq_price*usd_krw_rate)})")
+    t2.metric("TQQQ 월봉 RSI", f"{mkt['tqqq_rsi_mo']:.1f}", "Month Trend")
+    t3.metric("TQQQ 주봉 RSI", f"{mkt['tqqq_rsi_wk']:.1f}", get_rsi_status(mkt['tqqq_rsi_wk']))
+    t4.metric("TQQQ MDD", f"{mkt['tqqq_mdd']*100:.2f}%", get_mdd_status(mkt['tqqq_mdd']))
 
     # --- 2. 포트폴리오 진단 ---
     st.markdown("---")
@@ -210,13 +295,34 @@ if df is not None:
     else:
         st.progress(1.0, text="🏆 Final Phase 달성! (은퇴 준비 완료)")
 
-    p1, p2, p3, p4 = st.columns(4)
+    # 포트폴리오 핵심 지표 (7-Column Layout)
+    p1, p2, p3, p4, p5, p6, p7 = st.columns(7)
     phase_info = PHASE_CONFIG[current_phase]
     
-    p1.metric("현재 Phase", phase_info['name'], f"목표: TQQQ {int(phase_info['target_stock']*100)}% : 현금 {int(phase_info['target_cash']*100)}%")
+    # 1. Phase
+    p1.metric("현재 Phase", phase_info['name'], f"목표: {int(phase_info['target_stock']*100)}:{int(phase_info['target_cash']*100)}")
+    
+    # 2. 총 자산
     p2.metric("총 자산 (합산)", format_krw(total_assets))
-    p3.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
-    p4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
+    
+    # 3. 통합 수량 (New)
+    p3.metric("통합 보유 수량", f"{total_qty:,.2f}주")
+
+    # 4. 통합 평단
+    p4.metric("통합 평단가", format_krw(avg_price_krw))
+    
+    # 5. 현재 수익률
+    if total_qty > 0:
+        st_emoji = "🔴" if not is_loss else "🔵"
+        p5.metric("현재 수익률", f"{profit_rate:.2f}%", f"{st_emoji} 상태")
+    else:
+        p5.metric("현재 수익률", "0%", "대기")
+
+    # 6. TQQQ 비중
+    p6.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
+    
+    # 7. 현금 비중
+    p7.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
 
     if is_loss: st.error("🛑 [손실 중] 절대 방패 가동: 매도 금지")
     else: st.success("✅ [수익 중] 정상 로직 가동")
@@ -228,33 +334,21 @@ if df is not None:
     final_action = ""
     detail_msg = ""
     action_color = "blue"
-    trade_guide = "👉 **거래는 [B계좌: 스나이퍼]에서 수행하십시오.**"
+    
+    # 매도 우선순위 결정 (Tax Shield: 평단가 높은 계좌 우선 매도)
+    avg_a = st.session_state.a_tqqq_avg
+    avg_b = st.session_state.b_tqqq_avg
+    
+    if avg_a > avg_b and st.session_state.a_tqqq_qty > 0:
+        sell_priority_acc = "A계좌 (The Vault)"
+        sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.** (A평단 {format_krw(avg_a)} > B평단 {format_krw(avg_b)})"
+    else:
+        sell_priority_acc = "B계좌 (The Sniper)"
+        sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.** (B평단 {format_krw(avg_b)} >= A평단 {format_krw(avg_a)})"
 
-    # Logic Engine V17.7
-    if is_loss:
-        final_action = "🛑 HOLD (매도 금지)"
-        detail_msg = "손실 중입니다. 절대 팔지 마십시오."
-        action_color = "red"
-        if qqq_rsi >= 80:
-            final_action = "🛑 COMPLETE STOP (관망)"
-            detail_msg = "손실 중 + RSI 80. 아무것도 하지 마십시오."
-        elif qqq_mdd <= -0.2:
-            input_cash = 0
-            if qqq_mdd <= -0.5: input_cash = total_cash_krw
-            elif qqq_mdd <= -0.3: input_cash = total_cash_krw * 0.3
-            elif qqq_mdd <= -0.2: input_cash = total_cash_krw * 0.2
-            final_action = "📉 CRISIS BUY (위기 매수)"
-            detail_msg = f"MDD {mdd_pct:.1f}% 위기. 현금 투입: {format_krw(input_cash)}"
-            action_color = "green"
-        elif current_stock_ratio < (target_stock_ratio - 0.1):
-            buy_amt = (total_assets * target_stock_ratio) - total_tqqq_krw
-            final_action = "⚖️ REBALANCE BUY (비중 채우기)"
-            detail_msg = f"비중 미달. {format_krw(buy_amt)} 매수."
-            action_color = "green"
-        else:
-            final_action += " / 월급 적립 대기"
-
-    elif qqq_rsi >= 80:
+    # Logic Engine V17.9 (Refactored for Safety & Continuity)
+    # 1단계: 기본 액션 결정 (매수/매도/존버)
+    if qqq_rsi >= 80:
         target_cash_panic = target_cash_ratio + 0.1
         target_cash_amt = total_assets * target_cash_panic
         sell_needed = target_cash_amt - total_cash_krw
@@ -311,6 +405,15 @@ if df is not None:
             daily_amount = buy_amount / 20
             detail_msg += f" \n\n👉 **일일 자동적립 설정액 (20일 기준): {format_krw(daily_amount)}**"
 
+    # 2단계: 손실 방어 로직 (Override)
+    # 손실 중인데 '매도' 시그널이 떴다면 -> 강제로 'HOLD'로 변경
+    if is_loss and ("매도" in final_action or "SELL" in final_action):
+        final_action = "🛑 LOSS PROTECTION (손실 중 매도 금지)"
+        detail_msg = f"원래는 '{final_action}' 신호이나, 현재 손실 중이므로 매도를 금지합니다. (절대 원칙)\n\n👉 **매도 없이 홀딩하거나, 여유 자금이 있다면 적립식 매수를 계속하십시오.**"
+        action_color = "red"
+        # 매도 가이드 메시지 무효화
+        sell_guide_msg = "🚫 **손실 중입니다. 매도 버튼에 손대지 마십시오.**"
+
     st.info(f"💡 **판단:** {final_action}")
     
     if action_color == "red": st.error(detail_msg)
@@ -319,7 +422,7 @@ if df is not None:
     else: st.info(detail_msg)
     
     if "매도" in final_action or "SELL" in final_action:
-        st.markdown(f"🔥 {trade_guide}")
+        st.markdown(f"🔥 {sell_guide_msg}")
     elif "매수" in final_action or "BUY" in final_action:
          st.markdown(f"💰 **매수는 [A계좌: 금고] 우선, 단기는 [B계좌] 활용**")
 
@@ -340,7 +443,17 @@ if df is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
-        ### Ver 17.8 (Current) - The Tax Shield
+        ### Ver 17.9 (Current) - Deep Analytics & UI Reform
+        - **🤖 자동 손익 판단 엔진**: 수동 라디오 버튼 삭제. 보유 수량과 평단가를 기반으로 실시간 손익 상태(수익/손실) 자동 판별.
+        - **⚡ 실시간 평가금 계산**: TQQQ 수량 × 실시간 현재가(원화) 연동으로 1원 단위까지 정확한 자산 가치 산출.
+        - **📈 심층 시장 분석 (Deep Analytics)**: TQQQ의 주봉/월봉 RSI 및 MDD 지표 추가 (QQQ와 동일 수준 분석).
+        - **🛡️ Loss Protection (절대 방패)**: 손실 구간 진입 시 모든 매도 시그널을 강제로 차단하고 홀딩/적립을 유도하는 안전장치 강화.
+        - **🖥️ UI/UX 전면 개편**:
+            - 포트폴리오 진단 섹션 7-Column 확장 (통합 수량, 평단, 수익률 등 핵심 지표 일렬 배치).
+            - 가격 표시 방식 개선 (달러/원화 병기).
+            - Tax Shield 로직 고도화 (A/B 계좌 평단 비교 후 절세 매도 가이드).
+
+        ### Ver 17.8 - The Tax Shield
         - **🛡️ 계좌 C (The Bunker) 신설**: 세금 및 비상금 격리용 계좌 추가 (수익금의 22% 자동 이체 규칙).
         - **🧾 Tax Shield 로직 탑재**: 광기 매도/리밸런싱 매도 시 세금 격리(22%) 알림 메시지 출력.
         - **🧮 자산 로직 고도화**: 총 자산 계산에 계좌 C 포함하여 Phase 판단 정확도 향상.
