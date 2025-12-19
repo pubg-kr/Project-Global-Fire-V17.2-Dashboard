@@ -26,4 +26,5 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
+          SEND_DAILY_HEALTH: ${{ secrets.SEND_DAILY_HEALTH }}
         run: python alert.py
