@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 17.3)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 18.0)
 **"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -8,7 +8,7 @@
 ---
 
 ## 1. 시스템 아키텍처 (System Architecture)
-*Ver 17.3 필수 패치: 3-Core 계좌 운용*
+*Ver 18.0 필수 패치: 3-Core 계좌 운용*
 
 | 계좌명 | 별칭 | 용도 및 규칙 |
 | :--- | :--- | :--- |
@@ -54,9 +54,10 @@
 *   **Action:**
     *   📉 **[긴급 매수]** (계좌 B의 현금 사용)
     *   **Formula:** 보유 현금 잔고의 **N%** 투입.
-        *   MDD -20% : 현금의 20% 투입
-        *   MDD -30% : 현금의 30% 투입
-        *   MDD -50% : 현금 100% 투입 (All-In)
+        *   MDD -20% : 현금의 20% 투입 (조정장)
+        *   MDD -30% : 현금의 30% 투입 (폭락장)
+        *   MDD -40% : 현금의 30% 투입 (금융위기)
+        *   MDD -50% : 현금 100% 투입 (대공황 / All-In)
     *   *Logic:* Phase가 올라가 현금이 많아질수록, 투입되는 절대 금액도 커짐.
 
 ### [Step 4] 자동 리밸런싱 (Auto-Balancing)
@@ -109,7 +110,7 @@
 *   **비중 초과:** 현금 **`Target`** 만들기.
 
 ### 3. 매수 공식
-*   **MDD 폭락:** 현금 털어 넣기.
+*   **MDD 폭락:** 현금 털어 넣기 (-20%, -30%, -40%, -50% 단계별).
 *   **비중 미달:** 주식 **`Target`** 만들기.
 
 ### 4. 월급날 공식 (RSI 기준)

@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V17.9", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V18.0", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -156,7 +156,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 17.9 (Deep Analytics & UI Reform)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 18.0 (Ultimate Logic)** | System Owner: **Busan Programmer**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -363,10 +363,26 @@ if mkt is not None:
     elif qqq_mdd <= -0.2:
         input_cash = 0
         ratio_str = ""
-        if qqq_mdd <= -0.5: input_cash = total_cash_krw; ratio_str="100%"
-        elif qqq_mdd <= -0.3: input_cash = total_cash_krw * 0.3; ratio_str="30%"
-        elif qqq_mdd <= -0.2: input_cash = total_cash_krw * 0.2; ratio_str="20%"
-        final_action = "📉 CRISIS BUY (긴급 매수)"
+        level_str = ""
+        
+        if qqq_mdd <= -0.5: 
+            input_cash = total_cash_krw
+            ratio_str="100% (All-In)"
+            level_str = "대공황"
+        elif qqq_mdd <= -0.4:
+            input_cash = total_cash_krw * 0.3
+            ratio_str="30%"
+            level_str = "금융위기"
+        elif qqq_mdd <= -0.3:
+            input_cash = total_cash_krw * 0.3
+            ratio_str="30%"
+            level_str = "폭락장"
+        elif qqq_mdd <= -0.2:
+            input_cash = total_cash_krw * 0.2
+            ratio_str="20%"
+            level_str = "조정장"
+            
+        final_action = f"📉 CRISIS BUY ({level_str})"
         detail_msg = f"MDD {mdd_pct:.1f}%. 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
         action_color = "green"
 
@@ -443,7 +459,13 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
-        ### Ver 17.9 (Current) - Deep Analytics & UI Reform
+        ### Ver 18.0 (Current) - The Ultimate Logic
+        - **📉 MDD 대응 로직 세분화 (Precision Strike)**:
+            - 기존 3단계(-20, -30, -50%)에서 **4단계(-20, -30, -40, -50%)**로 확장.
+            - **-40% (금융위기)** 구간 신설: 현금 30% 추가 투입으로 하락장 평단가 관리 강화.
+            - "분할 매수의 마법"을 극대화하여 폭락장 방어력 증대.
+
+        ### Ver 17.9 - Deep Analytics & UI Reform
         - **🤖 자동 손익 판단 엔진**: 수동 라디오 버튼 삭제. 보유 수량과 평단가를 기반으로 실시간 손익 상태(수익/손실) 자동 판별.
         - **⚡ 실시간 평가금 계산**: TQQQ 수량 × 실시간 현재가(원화) 연동으로 1원 단위까지 정확한 자산 가치 산출.
         - **📈 심층 시장 분석 (Deep Analytics)**: TQQQ의 주봉/월봉 RSI 및 MDD 지표 추가 (QQQ와 동일 수준 분석).
