@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.1.1)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.2)
 **"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -41,11 +41,11 @@
 **"위에서부터 순서대로 `Check`하고, `True`면 실행 후 종료합니다."**
 
 ### [Priority 1] 생존 헌법 (Constitution)
-*   **Condition:** 내 계좌 통합 수익률 < 0% (손실 중)
+*   **Condition:** 내 계좌 통합 수익률 < **+1.5%** (수수료 포함 실질 손실)
 *   **Action:**
     *   🛑 **[절대 매도 금지]**
     *   *System:* 아래 [Step 2] 광기 차단이나 [Step 4] 리밸런싱 매도 신호가 떠도 **무시하고 무효화**합니다.
-    *   *Logic:* TQQQ의 변동성 끌림으로 QQQ가 올라도 내 계좌는 마이너스일 수 있음. 이때 팔면 복구 불능.
+    *   *Logic:* 장부상 0%는 수수료 감안 시 손실임. +1.5% 여유 마진 확보 필요.
 
 ### [Priority 2] 광기 차단 (Circuit Breaker)
 *   **Condition:** QQQ 주봉 RSI ≥ 80 **AND** 계좌 수익 중
@@ -82,7 +82,8 @@
 
 | Phase | 자산 구간 | **Target_Stock (주식목표)** | **Target_Cash (현금목표)** |
 | :--- | :--- | :---: | :---: |
-| **Phase 1** | **0 ~ 5억** | **80%** | **20%** |
+| **Phase 0** | **0 ~ 1억 (Seed)** | **90%** | **10%** |
+| Phase 1 | ~ 5억 | 80% | 20% |
 | Phase 2 | ~ 10억 | 70% | 30% |
 | Phase 3 | ~ 20억 | 60% | 40% |
 | Phase 4 | ~ 25억 | 50% | 50% |

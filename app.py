@@ -60,6 +60,7 @@ def save_data():
 st.set_page_config(page_title="Global Fire CRO V19.1.1", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
+    0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
     2: {"limit": 1000000000, "target_stock": 0.7, "target_cash": 0.3, "name": "Phase 2 (상승)"},
     3: {"limit": 2000000000, "target_stock": 0.6, "target_cash": 0.4, "name": "Phase 3 (순항)"},
@@ -166,6 +167,7 @@ def get_market_data():
         return None
 
 def determine_phase(total_assets):
+    if total_assets <= PHASE_CONFIG[0]['limit']: return 0
     for p in range(1, 6):
         if total_assets <= PHASE_CONFIG[p]['limit']: return p
     return 5
@@ -177,7 +179,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.1.1 (Logic Patch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.2 (Fine-Tuning)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -260,11 +262,13 @@ if mkt is not None:
                          (st.session_state.b_tqqq_qty * st.session_state.b_tqqq_avg)
     
     avg_price_krw = total_invested_krw / total_qty if total_qty > 0 else 0
-    is_loss = tqqq_krw < avg_price_krw if total_qty > 0 else False
     
+    # [Ver 19.2] 손실 판단 기준 변경: 0% -> +1.5% (수수료 및 슬리피지 방어)
     profit_rate = 0.0
     if total_qty > 0:
         profit_rate = ((tqqq_krw - avg_price_krw) / avg_price_krw) * 100
+    
+    is_loss = profit_rate < 1.5 if total_qty > 0 else False
 
     # --- 계산 로직 ---
     # Session State 값을 사용하여 계산
@@ -539,6 +543,10 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.2 (Fine-Tuning)
+        - **🛡️ 손실 정의 현실화**: 수수료/슬리피지를 고려하여 손실 판단 기준을 0% 미만에서 **+1.5% 미만**으로 상향 조정. (실질적 원금 보존)
+        - **🌱 Phase 0 (Seed) 신설**: 자산 1억 미만 초기 단계에서는 **주식 90% : 현금 10%**로 공격적 운용 허용.
+
         ### Ver 19.1.1 (Critical Logic Patch)
         - **🚦 논리 충돌 해결 (Conflict Resolution)**: 'RSI 80 과열'과 '계좌 손실'이 동시에 발생할 경우, **'손실 중 매도 금지'를 최우선 순위**로 확정. (자산 영구 손실 방지)
         - **⚖️ 지표 기준 명확화**: 모든 기술적 지표(RSI, MDD)는 변동성 왜곡이 없는 **QQQ**를 기준으로 함을 명시.
