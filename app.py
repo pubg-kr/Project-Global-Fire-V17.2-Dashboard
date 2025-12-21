@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.1.1", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.3", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -69,11 +69,12 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 19.1.1
+### 📜 Master Protocol (요약) - Ver 19.3
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
-2.  **[광기] RSI 80:** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
+2.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
 3.  **[위기] MDD 폭락:** 현금을 투입하여 평단가를 낮춘다.
 4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
+5.  **[경보] 버블 징후:** VIX 급등 시 방어 모드(주식 비중 축소) 발동.
 """
 
 # ==========================================
@@ -179,7 +180,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.2 (Fine-Tuning)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.3 (Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -277,16 +278,44 @@ if mkt is not None:
                      ((st.session_state.a_cash_usd + st.session_state.b_cash_usd) * usd_krw_rate)
     total_assets = total_tqqq_krw + total_cash_krw
     
+    # --- 1. 시장 상황판 (먼저 표시하여 변수 정의) ---
+    st.header("1. 시장 상황판 (Market Status)")
+    
+    # [Ver 19.3] 버블 경보 시스템 (수동/자동 하이브리드)
+    # 위치 이동: 계산 로직보다 먼저 렌더링하여 bubble_manual 변수를 확보
+    with st.expander("🚨 버블 붕괴 조기 경보 (Early Warning System)", expanded=False):
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown("""
+            **감시 지표 (The Four Horsemen):**
+            1. **장단기 금리차 역전 후 정상화 (Un-inversion):** 경기 침체의 가장 확실한 선행 지표.
+            2. **VIX 급등:** 시장 공포지수 20 돌파 시 주의.
+            3. **시장 너비 붕괴:** 지수는 오르는데 하락 종목 수가 더 많음.
+            """)
+        with c2:
+            bubble_manual = st.checkbox("⚠️ 시장 이상 징후 감지 (방어 모드 발동)", value=False, help="체크 시 주식 목표 비중을 10%p 낮추고, RSI 매도 기준을 75로 강화합니다.")
+
+    # Phase 결정 및 모드 설정 (변수 확보 후 실행)
     current_phase = determine_phase(total_assets)
-    target_stock_ratio = PHASE_CONFIG[current_phase]['target_stock']
-    target_cash_ratio = PHASE_CONFIG[current_phase]['target_cash']
+    base_target_stock = PHASE_CONFIG[current_phase]['target_stock']
+    base_target_cash = PHASE_CONFIG[current_phase]['target_cash']
+    
+    # [Ver 19.3] 버블 경보 발동 시 비중 조정 (Defensive Mode)
+    if bubble_manual or mkt['vix'] >= 25.0: # VIX 25 이상이면 자동 발동
+        if not bubble_manual: st.toast("🚨 VIX 25 돌파! 방어 모드가 자동 발동되었습니다.", icon="🛡️")
+        target_stock_ratio = base_target_stock - 0.1
+        target_cash_ratio = base_target_cash + 0.1
+        rsi_sell_threshold = 75 # 매도 기준 강화
+        mode_label = "🛡️ 방어 모드 (Defensive)"
+    else:
+        target_stock_ratio = base_target_stock
+        target_cash_ratio = base_target_cash
+        rsi_sell_threshold = 80
+        mode_label = "⚡ 일반 모드 (Normal)"
     
     current_stock_ratio = total_tqqq_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
 
-    # --- 1. 시장 상황판 ---
-    st.header("1. 시장 상황판 (Market Status)")
-    
     # Helper for labels
     def get_rsi_status(rsi):
         if rsi >= 80: return "🚨 광기"
@@ -343,7 +372,7 @@ if mkt is not None:
     phase_info = PHASE_CONFIG[current_phase]
     
     # 1. Phase
-    p1.metric("현재 Phase", phase_info['name'], f"목표: {int(phase_info['target_stock']*100)}:{int(phase_info['target_cash']*100)}")
+    p1.metric("현재 Phase", f"{phase_info['name']}", f"{mode_label}")
     
     # 2. 총 자산
     p2.metric("총 자산 (합산)", format_krw(total_assets))
@@ -362,10 +391,10 @@ if mkt is not None:
         p5.metric("현재 수익률", "0%", "대기")
 
     # 6. TQQQ 비중
-    p6.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100}%")
+    p6.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100:.0f}%")
     
     # 7. 현금 비중
-    p7.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100}%")
+    p7.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100:.0f}%")
 
     if is_loss: st.error("🛑 [손실 중] 절대 방패 가동: 매도 금지")
     else: st.success("✅ [수익 중] 정상 로직 가동")
@@ -374,9 +403,8 @@ if mkt is not None:
     st.markdown("---")
     st.header("3. CRO 실행 명령 (Action Protocol)")
     
-    final_action = ""
-    detail_msg = ""
-    action_color = "blue"
+    sell_priority_acc = ""
+    sell_guide_msg = ""
     
     # 매도 우선순위 결정 (Tax Shield: 평단가 높은 계좌 우선 매도)
     avg_a = st.session_state.a_tqqq_avg
@@ -402,8 +430,8 @@ if mkt is not None:
          monthly_color = "red"
     else:
         # 평시 (RSI 기반)
-        if qqq_rsi >= 75:
-             monthly_msg = "💤 **과열 (RSI 75+)**: 매수 금지. 월급은 현금으로 B계좌에 저축."
+        if qqq_rsi >= rsi_sell_threshold: # [Ver 19.3] 동적 임계값 적용 (80 or 75)
+             monthly_msg = f"💤 **과열 (RSI {rsi_sell_threshold}+)**: 매수 금지. 월급은 현금으로 B계좌에 저축."
         elif qqq_rsi >= 60:
              buy_amt_monthly = st.session_state.monthly_contribution * target_stock_ratio
              monthly_msg = f"✅ **표준**: 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amt_monthly)}) 매수."
@@ -427,17 +455,17 @@ if mkt is not None:
     detail_msg = ""
     action_color = "blue"
     
-    if qqq_rsi >= 80:
+    if qqq_rsi >= rsi_sell_threshold: # [Ver 19.3] 동적 임계값 적용
         target_cash_panic = target_cash_ratio + 0.1
         target_cash_amt = total_assets * target_cash_panic
         sell_needed = target_cash_amt - total_cash_krw
         if sell_needed > 0:
-            final_action = "🚨 PANIC SELL (광기 매도)"
-            detail_msg = f"RSI 80 돌파. {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
+            final_action = f"🚨 PANIC SELL (광기/방어 매도 - RSI {rsi_sell_threshold})"
+            detail_msg = f"RSI {rsi_sell_threshold} 돌파 (방어모드 적용). {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
             action_color = "red"
         else:
             final_action = "✅ HOLD (현금 충분)"
-            detail_msg = "RSI 80이나 현금이 충분합니다. 대기."
+            detail_msg = f"RSI {rsi_sell_threshold}이나 현금이 충분합니다. 대기."
 
     elif qqq_mdd <= -0.2:
         input_cash = 0
@@ -543,6 +571,12 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.3 (Bubble Watch)
+        - **🚨 버블 붕괴 조기 경보 (Early Warning)**:
+            - VIX(공포지수) 25 이상 급등 시 **'방어 모드'** 자동 발동.
+            - **[방어 모드 효과]**: 주식 목표 비중 -10%p 축소 / RSI 매도 기준 80->75 강화.
+            - 시장 상황판에 '이상 징후 감지(Manual Override)' 체크박스 추가 (수동 발동 가능).
+            
         ### Ver 19.2 (Fine-Tuning)
         - **🛡️ 손실 정의 현실화**: 수수료/슬리피지를 고려하여 손실 판단 기준을 0% 미만에서 **+1.5% 미만**으로 상향 조정. (실질적 원금 보존)
         - **🌱 Phase 0 (Seed) 신설**: 자산 1억 미만 초기 단계에서는 **주식 90% : 현금 10%**로 공격적 운용 허용.
