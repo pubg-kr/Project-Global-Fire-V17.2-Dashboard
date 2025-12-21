@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.2)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.3.1)
 **"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -15,8 +15,10 @@
 **"파티가 끝나기 전에 문 근처로 이동하십시오."**
 아래 징후가 포착되면 시스템은 **[방어 모드]**로 전환하여 주식 목표 비중을 축소합니다.
 
-*   **징후 1: 장단기 금리차 역전 후 정상화 (Un-inversion)**
-    *   *Condition:* (10년물 - 2년물) 금리차가 마이너스에서 플러스로 급격히 전환 시.
+*   **징후 1: 장단기 금리차 역전 후 정상화 (10Y - 3M)**
+    *   *Condition:* (10년물 - 3개월물) 금리차가 마이너스(역전) 진입 시.
+    *   *Fact Check:* 1960년대 이후 모든 경기침체를 100% 적중시킨 'Fed가 가장 신뢰하는 지표'.
+    *   *Risk:* 역전 자체보다 역전 후 급격히 정상화될 때가 진짜 '시스템 붕괴(Crash)' 시점임.
 *   **징후 2: VIX(공포지수)의 기조적 상승**
     *   *Condition:* VIX가 평온한 장세(15 이하)에서 갑자기 20 이상으로 튀어 올라 안 내려올 때.
 

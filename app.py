@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.3", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.3.1", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -111,9 +111,10 @@ def get_market_data():
         tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False)
         tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False)
         
-        # 매크로 지표 (VIX, 10년물 국채)
+        # 매크로 지표 (VIX, 10년물, 3개월물)
         vix = yf.download("^VIX", period="1d", progress=False)
-        tnx = yf.download("^TNX", period="1d", progress=False)
+        tnx = yf.download("^TNX", period="1d", progress=False) # 10년물
+        irx = yf.download("^IRX", period="1d", progress=False) # 3개월물 (2년물 대용, Fed 선호 지표)
         
         # 환율
         exch = yf.download("KRW=X", period="1d", progress=False)
@@ -121,7 +122,7 @@ def get_market_data():
         if qqq_wk.empty or exch.empty or tqqq_wk.empty: return None
 
         # MultiIndex 정리
-        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch, vix, tnx]:
+        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch, vix, tnx, irx]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
@@ -147,6 +148,8 @@ def get_market_data():
         # 매크로 데이터
         vix_val = float(vix['Close'].iloc[-1]) if not vix.empty else 0
         tnx_val = float(tnx['Close'].iloc[-1]) if not tnx.empty else 0
+        irx_val = float(irx['Close'].iloc[-1]) if not irx.empty else 0
+        yield_spread = tnx_val - irx_val # 10Y - 3M Spread
         
         return {
             'qqq_dy': qqq_dy,
@@ -162,7 +165,8 @@ def get_market_data():
             'tqqq_mdd': tqqq_mdd,
             'usd_krw': current_rate,
             'vix': vix_val,
-            'tnx': tnx_val
+            'tnx': tnx_val,
+            'yield_spread': yield_spread
         }
     except Exception as e:
         return None
@@ -180,7 +184,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.3 (Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.3.1 (Auto-Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -283,26 +287,37 @@ if mkt is not None:
     
     # [Ver 19.3] 버블 경보 시스템 (수동/자동 하이브리드)
     # 위치 이동: 계산 로직보다 먼저 렌더링하여 bubble_manual 변수를 확보
-    with st.expander("🚨 버블 붕괴 조기 경보 (Early Warning System)", expanded=False):
+    with st.expander("🚨 버블 붕괴 조기 경보 (Early Warning System)", expanded=True):
         c1, c2 = st.columns([3, 1])
         with c1:
-            st.markdown("""
-            **감시 지표 (The Four Horsemen):**
-            1. **장단기 금리차 역전 후 정상화 (Un-inversion):** 경기 침체의 가장 확실한 선행 지표.
-            2. **VIX 급등:** 시장 공포지수 20 돌파 시 주의.
-            3. **시장 너비 붕괴:** 지수는 오르는데 하락 종목 수가 더 많음.
+            spread_val = mkt['yield_spread']
+            spread_label = "✅ 정상 (Positive)" if spread_val > 0 else "🚨 위험 (Inverted)"
+            st.markdown(f"""
+            **자동 감시 지표 (Auto-Detection):**
+            1. **장단기 금리차 (10Y-3M):** **{spread_val:.3f}%p** [{spread_label}]
+               - *Fed 경기침체 예측 핵심 지표 (마이너스 진입 시 방어 모드)*
+            2. **VIX (공포지수):** **{mkt['vix']:.2f}** (25.0 이상 시 방어 모드)
             """)
         with c2:
-            bubble_manual = st.checkbox("⚠️ 시장 이상 징후 감지 (방어 모드 발동)", value=False, help="체크 시 주식 목표 비중을 10%p 낮추고, RSI 매도 기준을 75로 강화합니다.")
+            bubble_manual = st.checkbox("⚠️ 시장 이상 징후 강제 지정", value=False, help="시스템 감지 외에 '시장 너비 붕괴' 등을 사용자가 직접 느꼈을 때 체크하십시오.")
 
     # Phase 결정 및 모드 설정 (변수 확보 후 실행)
     current_phase = determine_phase(total_assets)
     base_target_stock = PHASE_CONFIG[current_phase]['target_stock']
     base_target_cash = PHASE_CONFIG[current_phase]['target_cash']
     
-    # [Ver 19.3] 버블 경보 발동 시 비중 조정 (Defensive Mode)
-    if bubble_manual or mkt['vix'] >= 25.0: # VIX 25 이상이면 자동 발동
-        if not bubble_manual: st.toast("🚨 VIX 25 돌파! 방어 모드가 자동 발동되었습니다.", icon="🛡️")
+    # [Ver 19.3.1] 버블 경보 자동/수동 로직 통합
+    # 발동 조건: 1) 사용자가 체크했거나 2) VIX가 25 넘거나 3) 금리차가 역전(0 미만)됐을 때
+    is_emergency = bubble_manual or (mkt['vix'] >= 25.0) or (mkt['yield_spread'] < 0)
+    
+    if is_emergency: 
+        if not bubble_manual:
+            reasons = []
+            if mkt['vix'] >= 25.0: reasons.append(f"VIX 급등({mkt['vix']:.1f})")
+            if mkt['yield_spread'] < 0: reasons.append(f"금리 역전({mkt['yield_spread']:.2f}%p)")
+            reason_text = ", ".join(reasons)
+            st.toast(f"🚨 위험 신호 감지! [{reason_text}] 방어 모드 발동.", icon="🛡️")
+            
         target_stock_ratio = base_target_stock - 0.1
         target_cash_ratio = base_target_cash + 0.1
         rsi_sell_threshold = 75 # 매도 기준 강화
@@ -351,7 +366,11 @@ if mkt is not None:
     tnx_label = "양호" if tnx < 4.0 else "⚠️ 고금리 주의"
     m2.metric("US 10Y (국채금리)", f"{tnx:.2f}%", tnx_label)
     
-    m3.empty() # Spacer
+    # Yield Spread
+    spread = mkt['yield_spread']
+    spread_msg = "✅ 정상" if spread > 0 else "🚨 역전 (Recession Warning)"
+    m3.metric("10Y-3M 금리차", f"{spread:.2f}%p", spread_msg)
+    
     m4.empty() # Spacer
 
     # --- 2. 포트폴리오 진단 ---
@@ -571,6 +590,12 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.3.1 (Auto-Bubble Watch)
+        - **🤖 자동 감지 지표 탑재 (Auto-Detection)**:
+            - **장단기 금리차 (10Y-3M)**: 연준(Fed)의 경기침체 예측 핵심 지표인 '3개월물' 데이터를 실시간 연동.
+            - **로직 강화**: VIX 25 이상 **또는** 금리차 역전(마이너스) 시 방어 모드 즉시 자동 발동.
+            - 이제 사용자가 체크하지 않아도 시스템이 먼저 위험을 감지합니다.
+
         ### Ver 19.3 (Bubble Watch)
         - **🚨 버블 붕괴 조기 경보 (Early Warning)**:
             - VIX(공포지수) 25 이상 급등 시 **'방어 모드'** 자동 발동.
