@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.0", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.1", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -70,9 +70,9 @@ PHASE_CONFIG = {
 PROTOCOL_TEXT = """
 ### 📜 Master Protocol (요약)
 1. **손실 중 매도 금지:** 파란불엔 절대 팔지 않는다.
-2. **RSI 80 광기:** 현금 비중을 Target + 10%까지 늘린다 (B계좌 매도).
+2. **RSI 80 광기:** 현금 비중을 Target + 10%까지 늘린다 (평단가 높은 계좌 우선).
 3. **MDD 위기:** 현금을 투입하여 평단가를 낮춘다.
-4. **월급 적립:** RSI 60 미만일 때 적극 매수한다.
+4. **월급 적립:** MDD -30% 이하는 100% 매수, 그 외엔 RSI에 따라 적립.
 """
 
 # ==========================================
@@ -177,7 +177,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.0 (Institutional Grade)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 19.1 (Institutional Grade)** | System Owner: **Busan Programmer**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -440,20 +440,26 @@ if mkt is not None:
     else:
         final_action = "📅 MONTHLY ROUTINE (월급 적립)"
         buy_amount = 0
-        # 월급 적립 로직
-        if qqq_rsi >= 75:
-            detail_msg = "RSI 75 이상. 매수 금지 (현금 저축)."
-        elif qqq_rsi >= 60:
-            buy_amount = st.session_state.monthly_contribution * target_stock_ratio
-            detail_msg = f"표준 구간. 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amount)}) 매수."
+        
+        # [Ver 19.1] 전시 상황 (MDD -30% 이하) -> RSI 무시하고 월급 100% 매수
+        if qqq_mdd <= -0.3:
+             buy_amount = st.session_state.monthly_contribution
+             detail_msg = f"📉 전시 상황 (MDD {qqq_mdd*100:.1f}%). RSI 무시하고 월급 100% ({format_krw(buy_amount)}) TQQQ 매수."
         else:
-            if total_cash_krw > (total_assets * target_cash_ratio):
-                buy_amount = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
-                detail_msg = f"기회(RSI<60) + 현금부자. 1.5배 가속: {format_krw(buy_amount)} 매수."
+            # 월급 적립 로직 (RSI 기반)
+            if qqq_rsi >= 75:
+                detail_msg = "RSI 75 이상. 매수 금지 (현금 저축)."
+            elif qqq_rsi >= 60:
+                buy_amount = st.session_state.monthly_contribution * target_stock_ratio
+                detail_msg = f"표준 구간. 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amount)}) 매수."
             else:
-                squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
-                buy_amount = st.session_state.monthly_contribution * squeeze_ratio
-                detail_msg = f"기회(RSI<60) + 현금부족. 쥐어짜기({squeeze_ratio*100:.0f}%): {format_krw(buy_amount)} 매수."
+                if total_cash_krw > (total_assets * target_cash_ratio):
+                    buy_amount = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
+                    detail_msg = f"기회(RSI<60) + 현금부자. 1.5배 가속: {format_krw(buy_amount)}) 매수."
+                else:
+                    squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
+                    buy_amount = st.session_state.monthly_contribution * squeeze_ratio
+                    detail_msg = f"기회(RSI<60) + 현금부족. 쥐어짜기({squeeze_ratio*100:.0f}%): {format_krw(buy_amount)}) 매수."
         
         # [요청] 일일 적립액 표시 (매수 금액이 0보다 클 때만)
         if buy_amount > 0:
@@ -516,7 +522,10 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
-        ### Ver 19.0 (Current) - Institutional Grade (Hedge Fund Edition)
+        ### Ver 19.1 (Latest) - War Time Protocol
+        - **🛡️ 전시 상황 매수 로직**: MDD -30% 이하 폭락장에서는 RSI 지표를 무시하고 **월급의 100%를 TQQQ 매수**에 투입. (기회 비용 최소화)
+        
+        ### Ver 19.0 (Institutional Grade)
         - **🌍 매크로 대시보드 (Macro Dashboard)**:
             - **VIX (공포지수)**: 시장의 공포/탐욕 단계(안정/주의/공포)를 실시간 모니터링.
             - **US 10Y (국채금리)**: 기술주의 최대 적, 금리 동향을 한눈에 파악.
