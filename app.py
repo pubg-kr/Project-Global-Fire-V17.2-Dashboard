@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.1", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.1.1", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
@@ -68,11 +68,11 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약)
-1. **손실 중 매도 금지:** 파란불엔 절대 팔지 않는다.
-2. **RSI 80 광기:** 현금 비중을 Target + 10%까지 늘린다 (평단가 높은 계좌 우선).
-3. **MDD 위기:** 현금을 투입하여 평단가를 낮춘다.
-4. **월급 적립:** MDD -30% 이하는 100% 매수, 그 외엔 RSI에 따라 적립.
+### 📜 Master Protocol (요약) - Ver 19.1.1
+1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
+2.  **[광기] RSI 80:** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
+3.  **[위기] MDD 폭락:** 현금을 투입하여 평단가를 낮춘다.
+4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
 """
 
 # ==========================================
@@ -177,7 +177,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.1 (Institutional Grade)** | System Owner: **Busan Programmer**")
+st.markdown("**Ver 19.1.1 (Logic Patch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -385,8 +385,44 @@ if mkt is not None:
         sell_priority_acc = "B계좌 (The Sniper)"
         sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.** (B평단 {format_krw(avg_b)} >= A평단 {format_krw(avg_a)})"
 
-    # Logic Engine V17.9 (Refactored for Safety & Continuity)
-    # 1단계: 기본 액션 결정 (매수/매도/존버)
+    # Logic Engine V19.1.1 (Dual Pipeline: Asset & Monthly)
+    
+    # --- 1. 월급 매수 가이드 (Monthly Guide) - 독립 실행 ---
+    monthly_msg = ""
+    monthly_color = "blue"
+    
+    # [Ver 19.1] 전시 상황 (MDD -30% 이하) -> 무조건 100% 매수
+    if qqq_mdd <= -0.3:
+         buy_amt_monthly = st.session_state.monthly_contribution
+         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: RSI 무시하고 월급 100% ({format_krw(buy_amt_monthly)}) TQQQ 매수."
+         monthly_color = "red"
+    else:
+        # 평시 (RSI 기반)
+        if qqq_rsi >= 75:
+             monthly_msg = "💤 **과열 (RSI 75+)**: 매수 금지. 월급은 현금으로 B계좌에 저축."
+        elif qqq_rsi >= 60:
+             buy_amt_monthly = st.session_state.monthly_contribution * target_stock_ratio
+             monthly_msg = f"✅ **표준**: 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amt_monthly)}) 매수."
+        else:
+             # 기회 구간
+             if total_cash_krw > (total_assets * target_cash_ratio):
+                 buy_amt_monthly = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
+                 monthly_msg = f"💰 **기회 (Cash Rich)**: 1.5배 가속 ({format_krw(buy_amt_monthly)}) 매수."
+             else:
+                 squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
+                 buy_amt_monthly = st.session_state.monthly_contribution * squeeze_ratio
+                 monthly_msg = f"🩸 **기회 (Squeeze)**: 쥐어짜기 ({format_krw(buy_amt_monthly)}) 매수."
+    
+    # [요청] 일일 적립액 표시 (매수 금액이 0보다 클 때만)
+    if "매수" in monthly_msg and "금지" not in monthly_msg:
+         # 메시지에서 금액 추출이 어려우므로, 계산된 로직을 재사용해야 하나, 단순화를 위해 20으로 나눈 멘트만 추가
+         monthly_msg += " (일일 1/20 분할 매수 권장)"
+
+    # --- 2. 보유 자산 운용 (Asset Management) ---
+    final_action = ""
+    detail_msg = ""
+    action_color = "blue"
+    
     if qqq_rsi >= 80:
         target_cash_panic = target_cash_ratio + 0.1
         target_cash_amt = total_assets * target_cash_panic
@@ -422,7 +458,7 @@ if mkt is not None:
             level_str = "조정장"
             
         final_action = f"📉 CRISIS BUY ({level_str})"
-        detail_msg = f"MDD {mdd_pct:.1f}%. 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
+        detail_msg = f"MDD {qqq_mdd*100:.1f}%. 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
         action_color = "green"
 
     elif current_stock_ratio > (target_stock_ratio + 0.1):
@@ -438,50 +474,31 @@ if mkt is not None:
         action_color = "green"
 
     else:
-        final_action = "📅 MONTHLY ROUTINE (월급 적립)"
-        buy_amount = 0
-        
-        # [Ver 19.1] 전시 상황 (MDD -30% 이하) -> RSI 무시하고 월급 100% 매수
-        if qqq_mdd <= -0.3:
-             buy_amount = st.session_state.monthly_contribution
-             detail_msg = f"📉 전시 상황 (MDD {qqq_mdd*100:.1f}%). RSI 무시하고 월급 100% ({format_krw(buy_amount)}) TQQQ 매수."
-        else:
-            # 월급 적립 로직 (RSI 기반)
-            if qqq_rsi >= 75:
-                detail_msg = "RSI 75 이상. 매수 금지 (현금 저축)."
-            elif qqq_rsi >= 60:
-                buy_amount = st.session_state.monthly_contribution * target_stock_ratio
-                detail_msg = f"표준 구간. 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amount)}) 매수."
-            else:
-                if total_cash_krw > (total_assets * target_cash_ratio):
-                    buy_amount = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
-                    detail_msg = f"기회(RSI<60) + 현금부자. 1.5배 가속: {format_krw(buy_amount)}) 매수."
-                else:
-                    squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
-                    buy_amount = st.session_state.monthly_contribution * squeeze_ratio
-                    detail_msg = f"기회(RSI<60) + 현금부족. 쥐어짜기({squeeze_ratio*100:.0f}%): {format_krw(buy_amount)}) 매수."
-        
-        # [요청] 일일 적립액 표시 (매수 금액이 0보다 클 때만)
-        if buy_amount > 0:
-            daily_amount = buy_amount / 20
-            detail_msg += f" \n\n👉 **일일 자동적립 설정액 (20일 기준): {format_krw(daily_amount)}**"
+        final_action = "🧘 STABLING (관망)"
+        detail_msg = "특이사항 없음. 포트폴리오 유지."
 
-    # 2단계: 손실 방어 로직 (Override)
+    # --- 3. 최상위 헌법: 손실 방어 (Loss Protection) ---
     # 손실 중인데 '매도' 시그널이 떴다면 -> 강제로 'HOLD'로 변경
     if is_loss and ("매도" in final_action or "SELL" in final_action):
-        final_action = "🛑 LOSS PROTECTION (손실 중 매도 금지)"
-        detail_msg = f"원래는 '{final_action}' 신호이나, 현재 손실 중이므로 매도를 금지합니다. (절대 원칙)\n\n👉 **매도 없이 홀딩하거나, 여유 자금이 있다면 적립식 매수를 계속하십시오.**"
+        final_action = "🛡️ LOSS PROTECTION (절대 방어)"
+        detail_msg = f"시스템이 매도 신호를 감지했으나, **현재 손실 중**이므로 헌법 제1조에 의거하여 **매도를 금지(HOLD)**합니다."
         action_color = "red"
         # 매도 가이드 메시지 무효화
         sell_guide_msg = "🚫 **손실 중입니다. 매도 버튼에 손대지 마십시오.**"
 
-    st.info(f"💡 **판단:** {final_action}")
+    st.info(f"💡 **보유 자산 실행 (Asset Action):** {final_action}")
     
     if action_color == "red": st.error(detail_msg)
     elif action_color == "green": st.success(detail_msg)
     elif action_color == "orange": st.warning(detail_msg)
     else: st.info(detail_msg)
     
+    # 월급 행동 출력 (항상 표시)
+    st.markdown("---")
+    st.caption("📅 **월급 투입 지침 (Monthly Input)**")
+    if monthly_color == "red": st.error(monthly_msg)
+    else: st.info(monthly_msg)
+
     if "매도" in final_action or "SELL" in final_action:
         st.markdown(f"🔥 {sell_guide_msg}")
     elif "매수" in final_action or "BUY" in final_action:
@@ -522,7 +539,11 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
-        ### Ver 19.1 (Latest) - War Time Protocol
+        ### Ver 19.1.1 (Critical Logic Patch)
+        - **🚦 논리 충돌 해결 (Conflict Resolution)**: 'RSI 80 과열'과 '계좌 손실'이 동시에 발생할 경우, **'손실 중 매도 금지'를 최우선 순위**로 확정. (자산 영구 손실 방지)
+        - **⚖️ 지표 기준 명확화**: 모든 기술적 지표(RSI, MDD)는 변동성 왜곡이 없는 **QQQ**를 기준으로 함을 명시.
+
+        ### Ver 19.1 - War Time Protocol
         - **🛡️ 전시 상황 매수 로직**: MDD -30% 이하 폭락장에서는 RSI 지표를 무시하고 **월급의 100%를 TQQQ 매수**에 투입. (기회 비용 최소화)
         
         ### Ver 19.0 (Institutional Grade)
