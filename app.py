@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.3.1", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.3.2", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -69,12 +69,12 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 19.3
+### 📜 Master Protocol (요약) - Ver 19.3.2
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
 2.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
-3.  **[위기] MDD 폭락:** 현금을 투입하여 평단가를 낮춘다.
+3.  **[위기] MDD 폭락:** 현금을 투입하여 평단가를 낮춘다. (VIX 30+ 공격 매수)
 4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
-5.  **[경보] 버블 징후:** VIX 급등 시 방어 모드(주식 비중 축소) 발동.
+5.  **[경보] 버블 붕괴 감지:** VIX 20+ 안착 or 금리차 역전 후 정상화 시 방어 모드 발동.
 """
 
 # ==========================================
@@ -103,21 +103,21 @@ def calculate_indicators(df):
 def get_market_data():
     try:
         # QQQ (일봉/주봉/월봉)
-        qqq_dy = yf.download("QQQ", interval="1d", period="1y", progress=False)
-        qqq_wk = yf.download("QQQ", interval="1wk", period="2y", progress=False)
-        qqq_mo = yf.download("QQQ", interval="1mo", period="5y", progress=False)
+        qqq_dy = yf.download("QQQ", interval="1d", period="1y", progress=False, auto_adjust=False)
+        qqq_wk = yf.download("QQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
+        qqq_mo = yf.download("QQQ", interval="1mo", period="5y", progress=False, auto_adjust=False)
         
         # TQQQ (주봉/월봉)
-        tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False)
-        tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False)
+        tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
+        tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False, auto_adjust=False)
         
-        # 매크로 지표 (VIX, 10년물, 3개월물)
-        vix = yf.download("^VIX", period="1d", progress=False)
-        tnx = yf.download("^TNX", period="1d", progress=False) # 10년물
-        irx = yf.download("^IRX", period="1d", progress=False) # 3개월물 (2년물 대용, Fed 선호 지표)
+        # 매크로 지표 (VIX, 10년물, 3개월물) - 1년치 데이터 (추세 분석용)
+        vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=False)
+        tnx = yf.download("^TNX", period="1y", progress=False, auto_adjust=False) # 10년물
+        irx = yf.download("^IRX", period="1y", progress=False, auto_adjust=False) # 3개월물
         
         # 환율
-        exch = yf.download("KRW=X", period="1d", progress=False)
+        exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
         
         if qqq_wk.empty or exch.empty or tqqq_wk.empty: return None
 
@@ -145,12 +145,35 @@ def get_market_data():
         tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
         tqqq_rsi_mo, _ = calculate_indicators(tqqq_mo)
         
-        # 매크로 데이터
+        # 매크로 데이터 분석 (Ver 19.3.2)
         vix_val = float(vix['Close'].iloc[-1]) if not vix.empty else 0
         tnx_val = float(tnx['Close'].iloc[-1]) if not tnx.empty else 0
         irx_val = float(irx['Close'].iloc[-1]) if not irx.empty else 0
-        yield_spread = tnx_val - irx_val # 10Y - 3M Spread
+        yield_spread = tnx_val - irx_val
         
+        # VIX 5일 안착 여부 (최근 5일 최저가가 20 이상인지)
+        is_vix_trend = False
+        if len(vix) >= 5:
+            vix_recent_min = vix['Close'].tail(5).min()
+            is_vix_trend = (vix_recent_min >= 20.0)
+        else:
+            is_vix_trend = (vix_val >= 20.0)
+
+        # 금리차 역전 후 정상화 (Normalization) 감지
+        # 최근 6개월(약 126거래일) 내에 역전(-0.05 미만)이 있었는지 확인
+        # 그리고 현재는 양수인지 확인
+        is_spread_normalization = False
+        spread_series = None
+        if not tnx.empty and not irx.empty:
+            # 인덱스 정렬 후 계산
+            spread_series = tnx['Close'] - irx['Close']
+            spread_recent = spread_series.tail(126) # 6개월
+            was_inverted = (spread_recent < 0).any()
+            is_positive_now = (spread_series.iloc[-1] >= 0)
+            
+            if was_inverted and is_positive_now:
+                is_spread_normalization = True
+
         return {
             'qqq_dy': qqq_dy,
             'qqq_wk': qqq_wk,
@@ -166,9 +189,12 @@ def get_market_data():
             'usd_krw': current_rate,
             'vix': vix_val,
             'tnx': tnx_val,
-            'yield_spread': yield_spread
+            'yield_spread': yield_spread,
+            'is_vix_trend': is_vix_trend,
+            'is_spread_normalization': is_spread_normalization
         }
     except Exception as e:
+        # st.error(f"Data Fetch Error: {e}")
         return None
 
 def determine_phase(total_assets):
@@ -184,7 +210,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.3.1 (Auto-Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.3.2 (Precise-Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -285,18 +311,27 @@ if mkt is not None:
     # --- 1. 시장 상황판 (먼저 표시하여 변수 정의) ---
     st.header("1. 시장 상황판 (Market Status)")
     
-    # [Ver 19.3] 버블 경보 시스템 (수동/자동 하이브리드)
-    # 위치 이동: 계산 로직보다 먼저 렌더링하여 bubble_manual 변수를 확보
+    # [Ver 19.3.2] 버블 경보 시스템 (정밀 타격)
     with st.expander("🚨 버블 붕괴 조기 경보 (Early Warning System)", expanded=True):
         c1, c2 = st.columns([3, 1])
         with c1:
             spread_val = mkt['yield_spread']
-            spread_label = "✅ 정상 (Positive)" if spread_val > 0 else "🚨 위험 (Inverted)"
+            
+            # 지표 상태 메시지 생성
+            vix_status = "✅ 안정"
+            if mkt['is_vix_trend']: vix_status = "🚨 위험 (5일 안착)"
+            elif mkt['vix'] >= 20: vix_status = "⚠️ 주의 (20 돌파)"
+            
+            spread_status = "✅ 정상"
+            if mkt['is_spread_normalization']: spread_status = "🚨 위험 (역전 후 정상화)"
+            elif spread_val < 0: spread_status = "⚠️ 경고 (역전 중)"
+            
             st.markdown(f"""
             **자동 감시 지표 (Auto-Detection):**
-            1. **장단기 금리차 (10Y-3M):** **{spread_val:.3f}%p** [{spread_label}]
-               - *Fed 경기침체 예측 핵심 지표 (마이너스 진입 시 방어 모드)*
-            2. **VIX (공포지수):** **{mkt['vix']:.2f}** (25.0 이상 시 방어 모드)
+            1. **장단기 금리차 (10Y-3M):** **{spread_val:.3f}%p** [{spread_status}]
+               - *Trigger: 역전(-0.05 미만) 후 정상화(0 이상) 시*
+            2. **VIX (공포지수):** **{mkt['vix']:.2f}** [{vix_status}]
+               - *Trigger: 20.0 위에서 5거래일 안착 시*
             """)
         with c2:
             bubble_manual = st.checkbox("⚠️ 시장 이상 징후 강제 지정", value=False, help="시스템 감지 외에 '시장 너비 붕괴' 등을 사용자가 직접 느꼈을 때 체크하십시오.")
@@ -306,15 +341,14 @@ if mkt is not None:
     base_target_stock = PHASE_CONFIG[current_phase]['target_stock']
     base_target_cash = PHASE_CONFIG[current_phase]['target_cash']
     
-    # [Ver 19.3.1] 버블 경보 자동/수동 로직 통합
-    # 발동 조건: 1) 사용자가 체크했거나 2) VIX가 25 넘거나 3) 금리차가 역전(0 미만)됐을 때
-    is_emergency = bubble_manual or (mkt['vix'] >= 25.0) or (mkt['yield_spread'] < 0)
+    # [Ver 19.3.2] 방어 모드 발동 로직 (VIX 5일 안착 or 금리차 정상화)
+    is_emergency = bubble_manual or mkt['is_vix_trend'] or mkt['is_spread_normalization']
     
     if is_emergency: 
         if not bubble_manual:
             reasons = []
-            if mkt['vix'] >= 25.0: reasons.append(f"VIX 급등({mkt['vix']:.1f})")
-            if mkt['yield_spread'] < 0: reasons.append(f"금리 역전({mkt['yield_spread']:.2f}%p)")
+            if mkt['is_vix_trend']: reasons.append(f"VIX 기조적 상승({mkt['vix']:.1f})")
+            if mkt['is_spread_normalization']: reasons.append(f"금리차 역전 후 정상화({mkt['yield_spread']:.3f}%p)")
             reason_text = ", ".join(reasons)
             st.toast(f"🚨 위험 신호 감지! [{reason_text}] 방어 모드 발동.", icon="🛡️")
             
@@ -359,7 +393,8 @@ if mkt is not None:
     m1, m2, m3, m4 = st.columns(4)
     
     vix = mkt['vix']
-    vix_label = "안정 (Low Fear)" if vix < 20 else ("🚨 공포 (Panic)" if vix > 30 else "주의 (Caution)")
+    # VIX Label: 20 기준 (방어) / 30 기준 (공포/매수)
+    vix_label = "안정" if vix < 20 else ("🚨 공포 (Panic)" if vix > 30 else "🛡️ 방어 (Caution)")
     m1.metric("VIX (공포지수)", f"{vix:.2f}", vix_label)
     
     tnx = mkt['tnx']
@@ -369,6 +404,7 @@ if mkt is not None:
     # Yield Spread
     spread = mkt['yield_spread']
     spread_msg = "✅ 정상" if spread > 0 else "🚨 역전 (Recession Warning)"
+    if mkt['is_spread_normalization']: spread_msg = "⚠️ 붕괴 임박 (Normalization)"
     m3.metric("10Y-3M 금리차", f"{spread:.2f}%p", spread_msg)
     
     m4.empty() # Spacer
@@ -590,6 +626,12 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.3.2 (Precise Bubble Watch)
+        - **🛡️ 방어 모드 로직 고도화 (Fine-Tuning)**:
+            - **VIX 20 Trigger**: VIX가 일시적 스파이크가 아닌 **20 이상에서 5거래일 안착** 시 방어 모드 발동.
+            - **Yield Spread Trigger**: 장단기 금리차가 **역전 상태에서 정상화(0 위로 복귀)** 될 때를 진짜 위험(Crisis)으로 간주.
+            - **복귀 신호 (Re-entry)**: VIX 20 미만 안정화, RSI 바닥 탈출, 금리차 충격 해소 시 자동 복귀 안내.
+        
         ### Ver 19.3.1 (Auto-Bubble Watch)
         - **🤖 자동 감지 지표 탑재 (Auto-Detection)**:
             - **장단기 금리차 (10Y-3M)**: 연준(Fed)의 경기침체 예측 핵심 지표인 '3개월물' 데이터를 실시간 연동.
