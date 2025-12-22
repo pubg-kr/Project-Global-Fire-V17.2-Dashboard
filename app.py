@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.3.2", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.3.3", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -69,10 +69,10 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 19.3.2
+### 📜 Master Protocol (요약) - Ver 19.3.3
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
 2.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
-3.  **[위기] MDD 폭락:** 현금을 투입하여 평단가를 낮춘다. (VIX 30+ 공격 매수)
+3.  **[위기] MDD 최적화:** -15%부터 Sniper 현금 분할 투입 (-15, -25, -35, -45).
 4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
 5.  **[경보] 버블 붕괴 감지:** VIX 20+ 안착 or 금리차 역전 후 정상화 시 방어 모드 발동.
 """
@@ -210,7 +210,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.3.2 (Precise-Bubble Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.3.3 (Optimal-Crisis-Response)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -522,27 +522,31 @@ if mkt is not None:
             final_action = "✅ HOLD (현금 충분)"
             detail_msg = f"RSI {rsi_sell_threshold}이나 현금이 충분합니다. 대기."
 
-    elif qqq_mdd <= -0.2:
+    elif qqq_mdd <= -0.15: # [Ver 19.3.3] 진입 시점 -15%로 최적화 (-15, -25, -35, -45)
         input_cash = 0
         ratio_str = ""
         level_str = ""
         
         if qqq_mdd <= -0.5: 
-            input_cash = total_cash_krw
-            ratio_str="100% (All-In)"
-            level_str = "대공황"
-        elif qqq_mdd <= -0.4:
+            input_cash = total_cash_krw # 남은 잔돈 처리
+            ratio_str="100% (Last Bullet)"
+            level_str = "지옥 (Hell)"
+        elif qqq_mdd <= -0.45:
+            input_cash = total_cash_krw * 0.2
+            ratio_str="20% (All-In)"
+            level_str = "시스템 붕괴 (All-In)"
+        elif qqq_mdd <= -0.35:
             input_cash = total_cash_krw * 0.3
             ratio_str="30%"
             level_str = "금융위기"
-        elif qqq_mdd <= -0.3:
+        elif qqq_mdd <= -0.25:
             input_cash = total_cash_krw * 0.3
             ratio_str="30%"
-            level_str = "폭락장"
-        elif qqq_mdd <= -0.2:
+            level_str = "약세장 (Bear Market)"
+        elif qqq_mdd <= -0.15:
             input_cash = total_cash_krw * 0.2
             ratio_str="20%"
-            level_str = "조정장"
+            level_str = "깊은 조정 (Deep Correction)"
             
         final_action = f"📉 CRISIS BUY ({level_str})"
         detail_msg = f"MDD {qqq_mdd*100:.1f}%. 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
@@ -626,6 +630,13 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.3.3 (Optimal-Crisis-Response)
+        - **📉 위기 대응 로직 최적화 (Efficiency Optimized)**:
+            - **투입 타이밍 변경**: 기존 -20/-30/-40/-50% 에서 **-15/-25/-35/-45%** 로 변경.
+            - **-15% (Deep Correction)**: Sniper 계좌 첫 발사 시점. 잔파도(-10%)는 무시하고 의미 있는 조정부터 대응.
+            - **-45% (All-In)**: -50%라는 희박한 확률을 기다리기보다, -45%에서 사실상 모든 현금을 투입하여 반등 수익 극대화.
+            - **Golden Ratio**: 20% / 30% / 30% / 20% 의 피라미드형 분할 매수 적용.
+
         ### Ver 19.3.2 (Precise Bubble Watch)
         - **🛡️ 방어 모드 로직 고도화 (Fine-Tuning)**:
             - **VIX 20 Trigger**: VIX가 일시적 스파이크가 아닌 **20 이상에서 5거래일 안착** 시 방어 모드 발동.
