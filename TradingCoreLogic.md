@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.3.3)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.3.4)
 **"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -22,6 +22,9 @@
 *   **징후 2: VIX(공포지수)의 기조적 상승**
     *   *Condition:* VIX가 **20 위에서 5거래일 이상** 종가 기준으로 안착할 때. (일시적 스파이크 제외)
     *   *Logic:* VIX 20은 '방어 모드(방탄복 착용)' 신호이며, VIX 30은 '위기 대응(공격적 매수)'의 영역임.
+*   **징후 3: 이동평균선 이탈 (Trend Health Check)**
+    *   *Condition:* QQQ 주가가 **주봉 20선(20-week MA) 아래로 하향 돌파(Dead Cross)**하고 **2주 이상** 회복하지 못할 때.
+    *   *Logic:* "가격은 모든 뉴스에 선행한다." 주봉 20선은 시장의 생명선이며, 이것이 무너짐은 **'상승 추세의 엔진이 꺼졌음'**을 의미함.
 
 ### 🏳️ 해제 조건 (Defense Mode OFF)
 *   **신호 1: VIX 지수의 하락 (Stabilization)**

@@ -57,7 +57,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.3.3", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V19.3.4", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -69,12 +69,12 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 19.3.3
+### 📜 Master Protocol (요약) - Ver 19.3.4
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
 2.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
 3.  **[위기] MDD 최적화:** -15%부터 Sniper 현금 분할 투입 (-15, -25, -35, -45).
 4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
-5.  **[경보] 버블 붕괴 감지:** VIX 20+ 안착 or 금리차 역전 후 정상화 시 방어 모드 발동.
+5.  **[경보] 버블 붕괴 감지:** VIX 20+ 안착 / 금리차 정상화 / 주봉 20선 이탈(2주) 시 방어 모드 발동.
 """
 
 # ==========================================
@@ -174,6 +174,15 @@ def get_market_data():
             if was_inverted and is_positive_now:
                 is_spread_normalization = True
 
+        # [Ver 19.3.4] Trend Health Check (QQQ 주봉 20선 이탈)
+        # 조건: QQQ 주가가 주봉 20선 아래로 내려가고 2주 이상 회복 못함
+        is_trend_broken = False
+        qqq_ma20_wk = float(qqq_wk['MA20'].iloc[-1])
+        if len(qqq_wk) >= 2:
+            last_two_weeks = qqq_wk.tail(2)
+            # 최근 2주 모두 종가가 MA20 아래인지 확인
+            is_trend_broken = ((last_two_weeks['Close'] < last_two_weeks['MA20'])).all()
+
         return {
             'qqq_dy': qqq_dy,
             'qqq_wk': qqq_wk,
@@ -191,7 +200,9 @@ def get_market_data():
             'tnx': tnx_val,
             'yield_spread': yield_spread,
             'is_vix_trend': is_vix_trend,
-            'is_spread_normalization': is_spread_normalization
+            'is_spread_normalization': is_spread_normalization,
+            'is_trend_broken': is_trend_broken,
+            'qqq_ma20_wk': qqq_ma20_wk
         }
     except Exception as e:
         # st.error(f"Data Fetch Error: {e}")
@@ -210,7 +221,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.3.3 (Optimal-Crisis-Response)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 19.3.4 (Trend Health Check)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -326,12 +337,17 @@ if mkt is not None:
             if mkt['is_spread_normalization']: spread_status = "🚨 위험 (역전 후 정상화)"
             elif spread_val < 0: spread_status = "⚠️ 경고 (역전 중)"
             
+            trend_status = "✅ 상승 추세"
+            if mkt['is_trend_broken']: trend_status = "🚨 붕괴 (2주 연속 이탈)"
+            
             st.markdown(f"""
             **자동 감시 지표 (Auto-Detection):**
             1. **장단기 금리차 (10Y-3M):** **{spread_val:.3f}%p** [{spread_status}]
                - *Trigger: 역전(-0.05 미만) 후 정상화(0 이상) 시*
             2. **VIX (공포지수):** **{mkt['vix']:.2f}** [{vix_status}]
                - *Trigger: 20.0 위에서 5거래일 안착 시*
+            3. **추세 건강 (Trend Health):** **QQQ ${mkt['qqq_price']:.2f}** vs MA20 ${mkt['qqq_ma20_wk']:.2f} [{trend_status}]
+               - *Trigger: 주봉 20선 하향 돌파 후 2주 이상 회복 실패 시*
             """)
         with c2:
             bubble_manual = st.checkbox("⚠️ 시장 이상 징후 강제 지정", value=False, help="시스템 감지 외에 '시장 너비 붕괴' 등을 사용자가 직접 느꼈을 때 체크하십시오.")
@@ -342,13 +358,14 @@ if mkt is not None:
     base_target_cash = PHASE_CONFIG[current_phase]['target_cash']
     
     # [Ver 19.3.2] 방어 모드 발동 로직 (VIX 5일 안착 or 금리차 정상화)
-    is_emergency = bubble_manual or mkt['is_vix_trend'] or mkt['is_spread_normalization']
+    is_emergency = bubble_manual or mkt['is_vix_trend'] or mkt['is_spread_normalization'] or mkt['is_trend_broken']
     
     if is_emergency: 
         if not bubble_manual:
             reasons = []
             if mkt['is_vix_trend']: reasons.append(f"VIX 기조적 상승({mkt['vix']:.1f})")
             if mkt['is_spread_normalization']: reasons.append(f"금리차 역전 후 정상화({mkt['yield_spread']:.3f}%p)")
+            if mkt['is_trend_broken']: reasons.append(f"추세 붕괴(주봉 20선 이탈)")
             reason_text = ", ".join(reasons)
             st.toast(f"🚨 위험 신호 감지! [{reason_text}] 방어 모드 발동.", icon="🛡️")
             
@@ -630,6 +647,11 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 19.3.4 (Trend Health Check)
+        - **🛡️ 3중 방어 체계 완성 (Triple Guard)**:
+            - **Trend Health Check**: QQQ 주봉 20선(생명선) 하향 이탈 후 **2주 이상 회복 실패** 시, '상승 추세 종료'로 간주하여 방어 모드 발동.
+            - 기존 [거시경제(금리) / 심리(VIX)]에 더해 [가격 추세]까지 확인하는 빈틈없는 방어막 구축.
+
         ### Ver 19.3.3 (Optimal-Crisis-Response)
         - **📉 위기 대응 로직 최적화 (Efficiency Optimized)**:
             - **투입 타이밍 변경**: 기존 -20/-30/-40/-50% 에서 **-15/-25/-35/-45%** 로 변경.
