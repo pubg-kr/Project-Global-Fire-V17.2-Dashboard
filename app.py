@@ -16,10 +16,14 @@ def load_data():
         "monthly_contribution": 5000000,
         "a_tqqq_qty": 1000.0,
         "a_tqqq_avg": 80000,
+        "a_usd_qty": 0.0,
+        "a_usd_avg": 0,
         "a_cash_krw": 0,
         "a_cash_usd": 0,
         "b_tqqq_qty": 200.0,
         "b_tqqq_avg": 85000,
+        "b_usd_qty": 0.0,
+        "b_usd_avg": 0,
         "b_cash_krw": 1000000,
         "b_cash_usd": 15000,
         "c_cash_krw": 0
@@ -43,10 +47,14 @@ def save_data():
         "monthly_contribution": st.session_state.monthly_contribution,
         "a_tqqq_qty": st.session_state.a_tqqq_qty,
         "a_tqqq_avg": st.session_state.a_tqqq_avg,
+        "a_usd_qty": st.session_state.a_usd_qty,
+        "a_usd_avg": st.session_state.a_usd_avg,
         "a_cash_krw": st.session_state.a_cash_krw,
         "a_cash_usd": st.session_state.a_cash_usd,
         "b_tqqq_qty": st.session_state.b_tqqq_qty,
         "b_tqqq_avg": st.session_state.b_tqqq_avg,
+        "b_usd_qty": st.session_state.b_usd_qty,
+        "b_usd_avg": st.session_state.b_usd_avg,
         "b_cash_krw": st.session_state.b_cash_krw,
         "b_cash_usd": st.session_state.b_cash_usd,
         "c_cash_krw": st.session_state.c_cash_krw
@@ -57,7 +65,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V19.3.4", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V20.0", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -69,11 +77,11 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 19.3.4
+### 📜 Master Protocol (요약) - Ver 20.0 Dual Engine
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
-2.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
-3.  **[위기] MDD 최적화:** -15%부터 Sniper 현금 분할 투입 (-15, -25, -35, -45).
-4.  **[월급] 전시 상황:** MDD -30% 이하 시 RSI 무시하고 월급 100% 매수.
+2.  **[듀얼] 50:50 황금비:** TQQQ(50%)와 USD(50%) 비중을 유지하며 리밸런싱한다.
+3.  **[광기] RSI 80 (방어 75):** (수익 중일 때만) 현금 비중을 Target + 10%까지 늘린다.
+4.  **[위기] MDD 최적화:** -15%부터 Sniper 현금 분할 투입 (-15, -25, -35, -45).
 5.  **[경보] 버블 붕괴 감지:** VIX 20+ 안착 / 금리차 정상화 / 주봉 20선 이탈(2주) 시 방어 모드 발동.
 """
 
@@ -110,6 +118,10 @@ def get_market_data():
         # TQQQ (주봉/월봉)
         tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
         tqqq_mo = yf.download("TQQQ", interval="1mo", period="5y", progress=False, auto_adjust=False)
+
+        # USD (주봉/월봉) - ProShares Ultra Semiconductors
+        usd_wk = yf.download("USD", interval="1wk", period="2y", progress=False, auto_adjust=False)
+        usd_mo = yf.download("USD", interval="1mo", period="5y", progress=False, auto_adjust=False)
         
         # 매크로 지표 (VIX, 10년물, 3개월물) - 1년치 데이터 (추세 분석용)
         vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=False)
@@ -119,10 +131,10 @@ def get_market_data():
         # 환율
         exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
         
-        if qqq_wk.empty or exch.empty or tqqq_wk.empty: return None
+        if qqq_wk.empty or exch.empty or tqqq_wk.empty or usd_wk.empty: return None
 
         # MultiIndex 정리
-        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, exch, vix, tnx, irx]:
+        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, usd_wk, usd_mo, exch, vix, tnx, irx]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
@@ -144,6 +156,11 @@ def get_market_data():
         tqqq_price = float(tqqq_wk['Close'].iloc[-1])
         tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
         tqqq_rsi_mo, _ = calculate_indicators(tqqq_mo)
+
+        # USD 지표
+        usd_price = float(usd_wk['Close'].iloc[-1])
+        usd_rsi_wk, usd_mdd = calculate_indicators(usd_wk)
+        usd_rsi_mo, _ = calculate_indicators(usd_mo)
         
         # 매크로 데이터 분석 (Ver 19.3.2)
         vix_val = float(vix['Close'].iloc[-1]) if not vix.empty else 0
@@ -195,6 +212,10 @@ def get_market_data():
             'tqqq_rsi_wk': tqqq_rsi_wk,
             'tqqq_rsi_mo': tqqq_rsi_mo,
             'tqqq_mdd': tqqq_mdd,
+            'usd_price': usd_price,
+            'usd_rsi_wk': usd_rsi_wk,
+            'usd_rsi_mo': usd_rsi_mo,
+            'usd_mdd': usd_mdd,
             'usd_krw': current_rate,
             'vix': vix_val,
             'tnx': tnx_val,
@@ -221,7 +242,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 19.3.4 (Trend Health Check)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 20.0 (Dual Engine Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -229,7 +250,15 @@ saved_data = load_data()
 # Session State 초기화 (없으면 파일 값으로)
 if "monthly_contribution" not in st.session_state:
     for key, val in saved_data.items():
-        st.session_state[key] = val
+        # 저장된 값이 있으면 사용, 없으면 기본값 (안전장치)
+        if key in saved_data:
+            st.session_state[key] = saved_data[key]
+        # 숫자형 데이터 강제 형변환 (스트림릿 에러 방지)
+        if "qty" in key or "avg" in key or "contribution" in key:
+                try:
+                    st.session_state[key] = float(st.session_state[key])
+                except:
+                    pass # 이미 float이거나 변환 불가 시 패스
 
 with st.expander("📜 Master Protocol (규정집)", expanded=False):
     st.markdown(PROTOCOL_TEXT)
@@ -240,6 +269,7 @@ if mkt is not None:
     # 데이터 매핑
     qqq_price = mkt['qqq_price']
     tqqq_price = mkt['tqqq_price']
+    usd_price = mkt['usd_price']
     usd_krw_rate = mkt['usd_krw']
     qqq_rsi = mkt['qqq_rsi_wk']
     qqq_mdd = mkt['qqq_mdd']
@@ -250,6 +280,7 @@ if mkt is not None:
     df_mo = mkt['qqq_mo']
 
     tqqq_krw = tqqq_price * usd_krw_rate  # TQQQ 현재가 (원화)
+    usd_stock_krw = usd_price * usd_krw_rate # USD 현재가 (원화)
 
     # --- 사이드바 (자동 저장 적용) ---
     st.sidebar.header("📝 자산 정보 (자동 저장됨)")
@@ -265,10 +296,14 @@ if mkt is not None:
     with st.sidebar.expander("🏦 계좌 A: 금고 (장기)", expanded=True):
         st.number_input("A: TQQQ 보유 수량", min_value=0.0, step=0.01, key="a_tqqq_qty", on_change=save_data, format="%.2f")
         st.number_input("A: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="a_tqqq_avg", on_change=save_data, format="%d")
+        st.markdown("---")
+        st.number_input("A: USD 보유 수량", min_value=0.0, step=0.01, key="a_usd_qty", on_change=save_data, format="%.2f")
+        st.number_input("A: USD 평균단가 (KRW)", min_value=0, step=100, key="a_usd_avg", on_change=save_data, format="%d")
         
         # A계좌 평가금 자동 계산
         a_tqqq_eval = st.session_state.a_tqqq_qty * tqqq_krw
-        st.caption(f"📊 평가금: **{format_krw(a_tqqq_eval)}**")
+        a_usd_eval = st.session_state.a_usd_qty * usd_stock_krw
+        st.caption(f"📊 TQQQ: **{format_krw(a_tqqq_eval)}** / USD: **{format_krw(a_usd_eval)}**")
         
         st.number_input("A: 원화 예수금", min_value=0, step=100000, key="a_cash_krw", on_change=save_data, format="%d")
         st.caption(f"👉 {format_krw(st.session_state.a_cash_krw)}")
@@ -280,10 +315,14 @@ if mkt is not None:
     with st.sidebar.expander("⚔️ 계좌 B: 스나이퍼 (매매)", expanded=True):
         st.number_input("B: TQQQ 보유 수량", min_value=0.0, step=0.01, key="b_tqqq_qty", on_change=save_data, format="%.2f")
         st.number_input("B: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="b_tqqq_avg", on_change=save_data, format="%d")
+        st.markdown("---")
+        st.number_input("B: USD 보유 수량", min_value=0.0, step=0.01, key="b_usd_qty", on_change=save_data, format="%.2f")
+        st.number_input("B: USD 평균단가 (KRW)", min_value=0, step=100, key="b_usd_avg", on_change=save_data, format="%d")
         
         # B계좌 평가금 자동 계산
         b_tqqq_eval = st.session_state.b_tqqq_qty * tqqq_krw
-        st.caption(f"📊 평가금: **{format_krw(b_tqqq_eval)}**")
+        b_usd_eval = st.session_state.b_usd_qty * usd_stock_krw
+        st.caption(f"📊 TQQQ: **{format_krw(b_tqqq_eval)}** / USD: **{format_krw(b_usd_eval)}**")
         
         st.number_input("B: 원화 예수금", min_value=0, step=100000, key="b_cash_krw", on_change=save_data, format="%d")
         st.caption(f"👉 {format_krw(st.session_state.b_cash_krw)}")
@@ -298,26 +337,33 @@ if mkt is not None:
 
     st.sidebar.markdown("---")
     
-    # --- 자동 손익 판단 로직 ---
-    total_qty = st.session_state.a_tqqq_qty + st.session_state.b_tqqq_qty
-    total_invested_krw = (st.session_state.a_tqqq_qty * st.session_state.a_tqqq_avg) + \
-                         (st.session_state.b_tqqq_qty * st.session_state.b_tqqq_avg)
+    # --- 자동 손익 판단 로직 (Ver 20.0 Dual Engine) ---
+    tqqq_qty = st.session_state.a_tqqq_qty + st.session_state.b_tqqq_qty
+    usd_qty = st.session_state.a_usd_qty + st.session_state.b_usd_qty
     
-    avg_price_krw = total_invested_krw / total_qty if total_qty > 0 else 0
+    tqqq_invested = (st.session_state.a_tqqq_qty * st.session_state.a_tqqq_avg) + \
+                    (st.session_state.b_tqqq_qty * st.session_state.b_tqqq_avg)
+    usd_invested = (st.session_state.a_usd_qty * st.session_state.a_usd_avg) + \
+                   (st.session_state.b_usd_qty * st.session_state.b_usd_avg)
+                   
+    total_invested_krw = tqqq_invested + usd_invested
     
     # [Ver 19.2] 손실 판단 기준 변경: 0% -> +1.5% (수수료 및 슬리피지 방어)
-    profit_rate = 0.0
-    if total_qty > 0:
-        profit_rate = ((tqqq_krw - avg_price_krw) / avg_price_krw) * 100
+    total_tqqq_krw = tqqq_qty * tqqq_krw
+    total_usd_krw = usd_qty * usd_stock_krw
+    total_stock_krw = total_tqqq_krw + total_usd_krw
     
-    is_loss = profit_rate < 1.5 if total_qty > 0 else False
+    profit_rate = 0.0
+    if total_invested_krw > 0:
+        profit_rate = ((total_stock_krw - total_invested_krw) / total_invested_krw) * 100
+    
+    is_loss = profit_rate < 1.5 if total_invested_krw > 0 else False
 
     # --- 계산 로직 ---
     # Session State 값을 사용하여 계산
-    total_tqqq_krw = a_tqqq_eval + b_tqqq_eval # 자동 계산된 값 사용
     total_cash_krw = (st.session_state.a_cash_krw + st.session_state.b_cash_krw + st.session_state.c_cash_krw) + \
                      ((st.session_state.a_cash_usd + st.session_state.b_cash_usd) * usd_krw_rate)
-    total_assets = total_tqqq_krw + total_cash_krw
+    total_assets = total_stock_krw + total_cash_krw
     
     # --- 1. 시장 상황판 (먼저 표시하여 변수 정의) ---
     st.header("1. 시장 상황판 (Market Status)")
@@ -379,7 +425,7 @@ if mkt is not None:
         rsi_sell_threshold = 80
         mode_label = "⚡ 일반 모드 (Normal)"
     
-    current_stock_ratio = total_tqqq_krw / total_assets if total_assets > 0 else 0
+    current_stock_ratio = total_stock_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
 
     # Helper for labels
@@ -405,6 +451,13 @@ if mkt is not None:
     t2.metric("TQQQ 월봉 RSI", f"{mkt['tqqq_rsi_mo']:.1f}", "Month Trend")
     t3.metric("TQQQ 주봉 RSI", f"{mkt['tqqq_rsi_wk']:.1f}", get_rsi_status(mkt['tqqq_rsi_wk']))
     t4.metric("TQQQ MDD", f"{mkt['tqqq_mdd']*100:.2f}%", get_mdd_status(mkt['tqqq_mdd']))
+
+    # USD Info (Ver 20.0)
+    u1, u2, u3, u4 = st.columns(4)
+    u1.metric("USD 현재가", f"${mkt['usd_price']:.2f} ({format_krw(mkt['usd_price']*usd_krw_rate)})")
+    u2.metric("USD 월봉 RSI", f"{mkt['usd_rsi_mo']:.1f}", "Month Trend")
+    u3.metric("USD 주봉 RSI", f"{mkt['usd_rsi_wk']:.1f}", get_rsi_status(mkt['usd_rsi_wk']))
+    u4.metric("USD MDD", f"{mkt['usd_mdd']*100:.2f}%", get_mdd_status(mkt['usd_mdd']))
 
     # Macro Info (V19.0)
     m1, m2, m3, m4 = st.columns(4)
@@ -449,21 +502,21 @@ if mkt is not None:
     # 2. 총 자산
     p2.metric("총 자산 (합산)", format_krw(total_assets))
     
-    # 3. 통합 수량 (New)
-    p3.metric("통합 보유 수량", f"{total_qty:,.2f}주")
+    # 3. 통합 수량 (New) - 주석 처리
+    # p3.metric("통합 보유 수량", f"{total_qty:,.2f}주")
 
     # 4. 통합 평단
-    p4.metric("통합 평단가", format_krw(avg_price_krw))
+    p4.metric("총 매수 원금", format_krw(total_invested_krw))
     
     # 5. 현재 수익률
-    if total_qty > 0:
+    if total_invested_krw > 0:
         st_emoji = "🔴" if not is_loss else "🔵"
         p5.metric("현재 수익률", f"{profit_rate:.2f}%", f"{st_emoji} 상태")
     else:
         p5.metric("현재 수익률", "0%", "대기")
 
-    # 6. TQQQ 비중
-    p6.metric("TQQQ 비중", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100:.0f}%")
+    # 6. 주식 비중
+    p6.metric("주식 비중 (TQ+USD)", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100:.0f}%")
     
     # 7. 현금 비중
     p7.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100:.0f}%")
@@ -479,15 +532,16 @@ if mkt is not None:
     sell_guide_msg = ""
     
     # 매도 우선순위 결정 (Tax Shield: 평단가 높은 계좌 우선 매도)
+    # Ver 20.0: 통합 수익률 기준으로 판단하므로 계좌별 평단 비교는 유지하되, TQQQ/USD 각각 고려 필요하나 복잡도 증가로 단순화
     avg_a = st.session_state.a_tqqq_avg
     avg_b = st.session_state.b_tqqq_avg
     
     if avg_a > avg_b and st.session_state.a_tqqq_qty > 0:
         sell_priority_acc = "A계좌 (The Vault)"
-        sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.** (A평단 {format_krw(avg_a)} > B평단 {format_krw(avg_b)})"
     else:
         sell_priority_acc = "B계좌 (The Sniper)"
-        sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.** (B평단 {format_krw(avg_b)} >= A평단 {format_krw(avg_a)})"
+    
+    sell_guide_msg = f"👉 **세금 절감: 평단가가 높은 [{sell_priority_acc}]에서 매도하십시오.**"
 
     # Logic Engine V19.1.1 (Dual Pipeline: Asset & Monthly)
     
@@ -498,7 +552,7 @@ if mkt is not None:
     # [Ver 19.1] 전시 상황 (MDD -30% 이하) -> 무조건 100% 매수
     if qqq_mdd <= -0.3:
          buy_amt_monthly = st.session_state.monthly_contribution
-         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: RSI 무시하고 월급 100% ({format_krw(buy_amt_monthly)}) TQQQ 매수."
+         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: RSI 무시하고 월급 100% ({format_krw(buy_amt_monthly)}) TQQQ & USD 분할 매수."
          monthly_color = "red"
     else:
         # 평시 (RSI 기반)
@@ -506,16 +560,16 @@ if mkt is not None:
              monthly_msg = f"💤 **과열 (RSI {rsi_sell_threshold}+)**: 매수 금지. 월급은 현금으로 B계좌에 저축."
         elif qqq_rsi >= 60:
              buy_amt_monthly = st.session_state.monthly_contribution * target_stock_ratio
-             monthly_msg = f"✅ **표준**: 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amt_monthly)}) 매수."
+             monthly_msg = f"✅ **표준**: 월급의 {target_stock_ratio*100:.0f}% ({format_krw(buy_amt_monthly)}) 매수 (TQQQ:USD = 1:1)."
         else:
              # 기회 구간
              if total_cash_krw > (total_assets * target_cash_ratio):
                  buy_amt_monthly = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
-                 monthly_msg = f"💰 **기회 (Cash Rich)**: 1.5배 가속 ({format_krw(buy_amt_monthly)}) 매수."
+                 monthly_msg = f"💰 **기회 (Cash Rich)**: 1.5배 가속 ({format_krw(buy_amt_monthly)}) 매수 (TQQQ:USD = 1:1)."
              else:
                  squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
                  buy_amt_monthly = st.session_state.monthly_contribution * squeeze_ratio
-                 monthly_msg = f"🩸 **기회 (Squeeze)**: 쥐어짜기 ({format_krw(buy_amt_monthly)}) 매수."
+                 monthly_msg = f"🩸 **기회 (Squeeze)**: 쥐어짜기 ({format_krw(buy_amt_monthly)}) 매수 (TQQQ:USD = 1:1)."
     
     # [요청] 일일 적립액 표시 (매수 금액이 0보다 클 때만)
     if "매수" in monthly_msg and "금지" not in monthly_msg:
@@ -527,13 +581,33 @@ if mkt is not None:
     detail_msg = ""
     action_color = "blue"
     
+    # Ver 20.0 Dual Engine Rebalancing Logic
+    # 1. TQQQ vs USD 비율 체크 (50:50)
+    tqqq_ratio = total_tqqq_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+    usd_ratio = total_usd_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+    
+    # 리밸런싱 트리거 (10%p 이상 벌어졌을 때 - 세금/수수료 최소화)
+    need_dual_rebalance = False
+    dual_msg = ""
+    if abs(tqqq_ratio - 0.5) > 0.1:
+        need_dual_rebalance = True
+        if tqqq_ratio > 0.5:
+            sell_target = "TQQQ"
+            buy_target = "USD"
+            amt = (total_tqqq_krw - total_usd_krw) / 2
+        else:
+            sell_target = "USD"
+            buy_target = "TQQQ"
+            amt = (total_usd_krw - total_tqqq_krw) / 2
+        dual_msg = f"⚖️ **듀얼 리밸런싱:** {sell_target} {format_krw(amt)} 매도 -> {buy_target} 매수 (비중 5:5 맞춤)"
+
     if qqq_rsi >= rsi_sell_threshold: # [Ver 19.3] 동적 임계값 적용
         target_cash_panic = target_cash_ratio + 0.1
         target_cash_amt = total_assets * target_cash_panic
         sell_needed = target_cash_amt - total_cash_krw
         if sell_needed > 0:
             final_action = f"🚨 PANIC SELL (광기/방어 매도 - RSI {rsi_sell_threshold})"
-            detail_msg = f"RSI {rsi_sell_threshold} 돌파 (방어모드 적용). {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
+            detail_msg = f"RSI {rsi_sell_threshold} 돌파. {format_krw(sell_needed)} 매도하여 현금 {target_cash_panic*100:.0f}% 확보.\n\n⚠️ TQQQ와 USD를 비중대로 매도하십시오.\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
             action_color = "red"
         else:
             final_action = "✅ HOLD (현금 충분)"
@@ -567,23 +641,34 @@ if mkt is not None:
             
         final_action = f"📉 CRISIS BUY ({level_str})"
         detail_msg = f"MDD {qqq_mdd*100:.1f}%. 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
+        if need_dual_rebalance:
+            detail_msg += f"\n\n{dual_msg}"
         action_color = "green"
 
     elif current_stock_ratio > (target_stock_ratio + 0.1):
-        sell_amt = total_tqqq_krw - (total_assets * target_stock_ratio)
+        sell_amt = total_stock_krw - (total_assets * target_stock_ratio)
         final_action = "⚖️ REBALANCE SELL (과열 방지)"
-        detail_msg = f"비중 초과. {format_krw(sell_amt)} 매도.\n\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
+        detail_msg = f"비중 초과. {format_krw(sell_amt)} 매도.\n\n⚠️ TQQQ/USD 중 비중 높은 것을 우선 매도하십시오.\n⚠️ [Tax Rule] 실현 수익금의 22%는 즉시 [계좌 C]로 이체하십시오."
+        if need_dual_rebalance:
+            detail_msg += f"\n\n{dual_msg}"
         action_color = "orange"
         
     elif current_stock_ratio < (target_stock_ratio - 0.1):
-        buy_amt = (total_assets * target_stock_ratio) - total_tqqq_krw
+        buy_amt = (total_assets * target_stock_ratio) - total_stock_krw
         final_action = "⚖️ REBALANCE BUY (저점 매수)"
         detail_msg = f"비중 미달. {format_krw(buy_amt)} 매수."
+        if need_dual_rebalance:
+            detail_msg += f"\n\n{dual_msg}"
         action_color = "green"
 
     else:
-        final_action = "🧘 STABLING (관망)"
-        detail_msg = "특이사항 없음. 포트폴리오 유지."
+        if need_dual_rebalance:
+            final_action = "⚖️ DUAL REBALANCE (엔진 균형)"
+            detail_msg = dual_msg
+            action_color = "orange"
+        else:
+            final_action = "🧘 STABLING (관망)"
+            detail_msg = "특이사항 없음. 포트폴리오 유지."
 
     # --- 3. 최상위 헌법: 손실 방어 (Loss Protection) ---
     # 손실 중인데 '매도' 시그널이 떴다면 -> 강제로 'HOLD'로 변경
@@ -647,6 +732,15 @@ if mkt is not None:
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
         st.markdown("""
+        ### Ver 20.0 (Dual Engine)
+        - **🚀 듀얼 엔진 전략 (The Dual Engine Strategy)**:
+            - **포트폴리오 대개편:** [TQQQ 100%] -> **[TQQQ 50% + USD 50%]**
+            - **TQQQ:** 나스닥 100 3배 (안정성 및 전체 성장)
+            - **USD:** 반도체 2배 (AI 주도주 폭발력 + 하락장 방어)
+            - **시스템 통합:** USD 데이터 실시간 연동 및 통합 자산 계산 로직 구현.
+        - **⚖️ 듀얼 리밸런싱 (Dual Rebalancing)**:
+            - TQQQ와 USD 간의 괴리율이 **10%p 이상** 발생 시, 리밸런싱 시그널 자동 생성. (잦은 매매 방지)
+
         ### Ver 19.3.4 (Trend Health Check)
         - **🛡️ 3중 방어 체계 완성 (Triple Guard)**:
             - **Trend Health Check**: QQQ 주봉 20선(생명선) 하향 이탈 후 **2주 이상 회복 실패** 시, '상승 추세 종료'로 간주하여 방어 모드 발동.

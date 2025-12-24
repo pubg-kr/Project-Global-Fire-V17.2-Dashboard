@@ -1,5 +1,5 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 19.3.4)
-**"The Variable Logic with Tax Shield (변수 기반 완전 자동화 + 세금 방어)"**
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 20.0)
+**"The Dual Engine Strategy (AI 반도체 + 빅테크 듀얼 코어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
 *   **Chief Risk Officer (CRO):** Gemini (AI)
@@ -8,8 +8,11 @@
 ---
 
 ## 0. 핵심 전제 (Prerequisites)
-1.  **지표 기준 (Benchmark):** 본 시스템의 모든 기술적 지표(RSI, MDD, MA 등)는 **[QQQ]**를 기준으로 판단합니다. (TQQQ 차트 X)
-2.  **자산 기준 (Asset):** 매수/매도 실행은 **[TQQQ]**로 수행합니다.
+1.  **지표 기준 (Benchmark):** 본 시스템의 모든 기술적 지표(RSI, MDD, MA 등)는 시장 전체를 대변하는 **[QQQ]**를 기준으로 판단합니다. (TQQQ/USD 개별 차트 X)
+    *   *Logic:* 개별 종목의 노이즈를 배제하고, 시장 전체의 '계절'을 판단하기 위함.
+2.  **자산 기준 (Asset):** 투자는 **[TQQQ (50%)]**와 **[USD (50%)]**의 듀얼 엔진으로 수행합니다.
+    *   **TQQQ:** 나스닥 100 3배 (전체 성장 + 복리 엔진)
+    *   **USD:** 반도체 2배 (주도주 폭발력 + 하락장 방어)
 
 ## 0.5 🚨 버블 붕괴 조기 경보 (Bubble Warning)
 **"파티가 끝나기 전에 문 근처로 이동하십시오."**
@@ -98,11 +101,11 @@
     *   **Exception:** MDD **-50%** 초과 하락 시, 현금은 없으므로 **[월급 100%]** 무한 투입으로 방어.
 
 ### [Priority 4] 자동 리밸런싱 (Auto-Balancing)
-*   **Condition:** 주식 비중 벗어남 **AND** 수익 중
-*   **Action:**
-    *   ⚖️ **[비중 복귀]**
-    *   **Over (과열):** 팔아서 **`[Target_Stock]`**으로 맞춤. (수익 중일 때만)
-    *   **Under (침체):** 사서 **`[Target_Stock]`**으로 맞춤.
+*   **Condition 1 (Asset Allocation):** (주식 총액 vs 현금) 비중 이탈
+    *   **Action:** 전체 주식 비중을 `Target_Stock`으로 맞춤.
+*   **Condition 2 (Dual Engine Balancing):** (TQQQ vs USD) 비율 이탈
+    *   **Action:** **50 : 50** 황금 비율 유지. (괴리율 10%p 이상 시)
+    *   *Logic:* 많이 오른 놈을 팔아 덜 오른 놈을 산다. (자동 고점 매도/저점 매수)
 
 ### [Priority 5] 월급날 루틴 (Monthly Routine)
 *   **Condition:** 오늘이 월급날인가?
@@ -127,7 +130,7 @@
 
 ### ⚠️ 특수 전시 상황 (War Time)
 *   **Condition:** **MDD -30% 이하** (폭락장 지속 중)
-*   **Action:** **RSI 무시하고 월급 100% TQQQ 매수.** (현금 적립 중단)
+*   **Action:** **RSI 무시하고 월급 100% TQQQ/USD 매수.** (현금 적립 중단)
 
 ### 🟢 일반 상황 (MDD -30% 이상)
 *   **RSI 기준 매수표:**
@@ -157,12 +160,16 @@
 *   **파란불(손실)이면 RSI 100이어도 죽어도 안 판다.**
 *   **익절 시 22%는 즉시 계좌 C로 유배 보낸다.**
 
-### 2. 매도 공식 (수익 중일 때만)
+### 2. 듀얼 엔진 운영
+*   **TQQQ : USD = 50 : 50 유지.**
+*   한쪽이 비대해지면 리밸런싱으로 수익 실현.
+
+### 3. 매도 공식 (수익 중일 때만)
 *   **순서:** **계좌 B(Sniper)**부터 판다. (세금 절약)
 *   **RSI 80:** 현금 **`Target + 10%`** 만들기.
 *   **비중 초과:** 현금 **`Target`** 만들기.
 
-### 3. 매수 공식 (Efficiency Optimized)
+### 4. 매수 공식 (Efficiency Optimized)
 *   **MDD 폭락(-30%↓):** **월급 100%** 투입.
 *   **Sniper 현금 투입:** **[-15% / -25% / -35% / -45%]** 구간마다 분할 투입.
 *   **비중 미달:** 주식 **`Target`** 만들기.
