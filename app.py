@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import json
 import os
+import requests
+from bs4 import BeautifulSoup
 
 # ==========================================
 # 0. 데이터 영구 저장 (Persistence)
@@ -200,6 +202,75 @@ def get_market_data():
             # 최근 2주 모두 종가가 MA20 아래인지 확인
             is_trend_broken = ((last_two_weeks['Close'] < last_two_weeks['MA20'])).all()
 
+        # [Ver 20.2] CNN 공포탐욕지수 (Fear & Greed Index)
+        fear_greed_value = 50  # 기본값 (중립)
+        fear_greed_text = "Neutral"
+        try:
+            # CNN Fear & Greed Index 웹 스크래핑
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            response = requests.get("https://production.dataviz.cnn.io/index/fearandgreed/graphdata", 
+                                   headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                fear_greed_value = int(data['fear_and_greed']['score'])
+                fear_greed_text = data['fear_and_greed']['rating']
+        except:
+            # Fallback: Alternative.me API (암호화폐 지수)
+            try:
+                response = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    fear_greed_value = int(data['data'][0]['value'])
+                    fear_greed_text = data['data'][0]['value_classification']
+            except:
+                pass  # API 실패 시 기본값 유지
+
+        # [Ver 20.2] 버핏지수 (Buffett Indicator)
+        # 공식: (Total Market Cap / GDP) × 100
+        buffett_indicator = 0
+        m2_money_stock = 0  # M2 통화량 (조 달러)
+        
+        try:
+            # 방법 1: Wilshire 5000 Full Cap (시가총액 직접 반영)
+            wilshire_full = yf.download("^W5000FLT", period="5d", progress=False, auto_adjust=False)
+            
+            if not wilshire_full.empty:
+                if isinstance(wilshire_full.columns, pd.MultiIndex):
+                    wilshire_full.columns = wilshire_full.columns.get_level_values(0)
+                wilshire_full_val = float(wilshire_full['Close'].iloc[-1])
+                
+                # Wilshire 5000 Full Cap은 시가총액을 직접 반영 (단위: 십억 달러)
+                # 지수값이 곧 시가총액 (Billion)
+                market_cap_trillion = wilshire_full_val / 1000
+                
+                # 미국 GDP (2024년 4분기 기준 약 28.27조 달러)
+                us_gdp_trillion = 28.27
+                
+                # 실제 미국 전체 시가총액 보정
+                # Wilshire 5000 Full Cap 기준으로 계산 (보정 불필요)
+                buffett_indicator = (market_cap_trillion / us_gdp_trillion) * 100
+                
+                # M2 통화량 (2024년 11월 기준 약 21.17조 달러)
+                m2_money_stock = 21.17
+            else:
+                # Fallback: 기존 Wilshire 5000 사용
+                wilshire = yf.download("^W5000", period="5d", progress=False, auto_adjust=False)
+                if not wilshire.empty:
+                    if isinstance(wilshire.columns, pd.MultiIndex):
+                        wilshire.columns = wilshire.columns.get_level_values(0)
+                    wilshire_val = float(wilshire['Close'].iloc[-1])
+                    
+                    # Wilshire 5000 지수 → 시가총액 근사 변환
+                    # 현재 지수 ≈ 시가총액 (십억 달러)
+                    market_cap_trillion = wilshire_val / 1000
+                    us_gdp_trillion = 28.27
+                    buffett_indicator = (market_cap_trillion / us_gdp_trillion) * 100
+                    m2_money_stock = 21.17
+        except:
+            buffett_indicator = 0  # 실패 시 0
+
         return {
             'qqq_dy': qqq_dy,
             'qqq_wk': qqq_wk,
@@ -223,7 +294,11 @@ def get_market_data():
             'is_vix_trend': is_vix_trend,
             'is_spread_normalization': is_spread_normalization,
             'is_trend_broken': is_trend_broken,
-            'qqq_ma20_wk': qqq_ma20_wk
+            'qqq_ma20_wk': qqq_ma20_wk,
+            'fear_greed_value': fear_greed_value,
+            'fear_greed_text': fear_greed_text,
+            'buffett_indicator': buffett_indicator,
+            'm2_money_stock': m2_money_stock
         }
     except Exception as e:
         # st.error(f"Data Fetch Error: {e}")
@@ -282,60 +357,66 @@ if mkt is not None:
     tqqq_krw = tqqq_price * usd_krw_rate  # TQQQ 현재가 (원화)
     usd_stock_krw = usd_price * usd_krw_rate # USD 현재가 (원화)
 
-    # --- 사이드바 (자동 저장 적용) ---
-    st.sidebar.header("📝 자산 정보 (자동 저장됨)")
+    # --- 사이드바 (Form 적용으로 입력 최적화) ---
+    st.sidebar.header("📝 자산 정보")
     st.sidebar.info(f"💵 환율: **{int(usd_krw_rate):,}원/$**")
     
-    # 월급 입력
-    st.sidebar.number_input("이번 달 투입금 (월급)", min_value=0, step=100000, key="monthly_contribution", on_change=save_data, format="%d")
-    st.sidebar.caption(f"👉 확인: **{format_krw(st.session_state.monthly_contribution)}**") # 가독성 헬퍼
-    
-    st.sidebar.markdown("---")
-    
-    # A계좌
-    with st.sidebar.expander("🏦 계좌 A: 금고 (장기)", expanded=True):
-        st.number_input("A: TQQQ 보유 수량", min_value=0.0, step=0.01, key="a_tqqq_qty", on_change=save_data, format="%.2f")
-        st.number_input("A: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="a_tqqq_avg", on_change=save_data, format="%d")
+    with st.sidebar.form("asset_form"):
+        # 월급 입력
+        st.number_input("이번 달 투입금 (월급)", min_value=0, step=100000, key="monthly_contribution", format="%d")
+        st.caption(f"👉 확인: **{format_krw(st.session_state.monthly_contribution)}**") # 가독성 헬퍼
+        
         st.markdown("---")
-        st.number_input("A: USD 보유 수량", min_value=0.0, step=0.01, key="a_usd_qty", on_change=save_data, format="%.2f")
-        st.number_input("A: USD 평균단가 (KRW)", min_value=0, step=100, key="a_usd_avg", on_change=save_data, format="%d")
         
-        # A계좌 평가금 자동 계산
-        a_tqqq_eval = st.session_state.a_tqqq_qty * tqqq_krw
-        a_usd_eval = st.session_state.a_usd_qty * usd_stock_krw
-        st.caption(f"📊 TQQQ: **{format_krw(a_tqqq_eval)}** / USD: **{format_krw(a_usd_eval)}**")
-        
-        st.number_input("A: 원화 예수금", min_value=0, step=100000, key="a_cash_krw", on_change=save_data, format="%d")
-        st.caption(f"👉 {format_krw(st.session_state.a_cash_krw)}")
-        
-        st.number_input("A: 달러 예수금", min_value=0, step=100, key="a_cash_usd", on_change=save_data, format="%d")
-        st.caption(f"👉 ${st.session_state.a_cash_usd:,.2f}")
+        # A계좌
+        with st.expander("🏦 계좌 A: 금고 (장기)", expanded=True):
+            st.number_input("A: TQQQ 보유 수량", min_value=0.0, step=0.01, key="a_tqqq_qty", format="%.2f")
+            st.number_input("A: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="a_tqqq_avg", format="%d")
+            st.markdown("---")
+            st.number_input("A: USD 보유 수량", min_value=0.0, step=0.01, key="a_usd_qty", format="%.2f")
+            st.number_input("A: USD 평균단가 (KRW)", min_value=0, step=100, key="a_usd_avg", format="%d")
+            
+            # A계좌 평가금 자동 계산
+            a_tqqq_eval = st.session_state.a_tqqq_qty * tqqq_krw
+            a_usd_eval = st.session_state.a_usd_qty * usd_stock_krw
+            st.caption(f"📊 TQQQ: **{format_krw(a_tqqq_eval)}** / USD: **{format_krw(a_usd_eval)}**")
+            
+            st.number_input("A: 원화 예수금", min_value=0, step=100000, key="a_cash_krw", format="%d")
+            st.caption(f"👉 {format_krw(st.session_state.a_cash_krw)}")
+            
+            st.number_input("A: 달러 예수금", min_value=0, step=100, key="a_cash_usd", format="%d")
+            st.caption(f"👉 ${st.session_state.a_cash_usd:,.2f}")
 
-    # B계좌
-    with st.sidebar.expander("⚔️ 계좌 B: 스나이퍼 (매매)", expanded=True):
-        st.number_input("B: TQQQ 보유 수량", min_value=0.0, step=0.01, key="b_tqqq_qty", on_change=save_data, format="%.2f")
-        st.number_input("B: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="b_tqqq_avg", on_change=save_data, format="%d")
+        # B계좌
+        with st.expander("⚔️ 계좌 B: 스나이퍼 (매매)", expanded=True):
+            st.number_input("B: TQQQ 보유 수량", min_value=0.0, step=0.01, key="b_tqqq_qty", format="%.2f")
+            st.number_input("B: TQQQ 평균단가 (KRW)", min_value=0, step=100, key="b_tqqq_avg", format="%d")
+            st.markdown("---")
+            st.number_input("B: USD 보유 수량", min_value=0.0, step=0.01, key="b_usd_qty", format="%.2f")
+            st.number_input("B: USD 평균단가 (KRW)", min_value=0, step=100, key="b_usd_avg", format="%d")
+            
+            # B계좌 평가금 자동 계산
+            b_tqqq_eval = st.session_state.b_tqqq_qty * tqqq_krw
+            b_usd_eval = st.session_state.b_usd_qty * usd_stock_krw
+            st.caption(f"📊 TQQQ: **{format_krw(b_tqqq_eval)}** / USD: **{format_krw(b_usd_eval)}**")
+            
+            st.number_input("B: 원화 예수금", min_value=0, step=100000, key="b_cash_krw", format="%d")
+            st.caption(f"👉 {format_krw(st.session_state.b_cash_krw)}")
+            
+            st.number_input("B: 달러 예수금", min_value=0, step=100, key="b_cash_usd", format="%d")
+            st.caption(f"👉 ${st.session_state.b_cash_usd:,.2f}")
+
+        # C계좌 (V17.3 추가)
+        with st.expander("🛡️ 계좌 C: 벙커 (세금/비상)", expanded=True):
+            st.number_input("C: 원화 예수금 (수익금 22%)", min_value=0, step=100000, key="c_cash_krw", format="%d")
+            st.caption(f"👉 {format_krw(st.session_state.c_cash_krw)}")
+
         st.markdown("---")
-        st.number_input("B: USD 보유 수량", min_value=0.0, step=0.01, key="b_usd_qty", on_change=save_data, format="%.2f")
-        st.number_input("B: USD 평균단가 (KRW)", min_value=0, step=100, key="b_usd_avg", on_change=save_data, format="%d")
-        
-        # B계좌 평가금 자동 계산
-        b_tqqq_eval = st.session_state.b_tqqq_qty * tqqq_krw
-        b_usd_eval = st.session_state.b_usd_qty * usd_stock_krw
-        st.caption(f"📊 TQQQ: **{format_krw(b_tqqq_eval)}** / USD: **{format_krw(b_usd_eval)}**")
-        
-        st.number_input("B: 원화 예수금", min_value=0, step=100000, key="b_cash_krw", on_change=save_data, format="%d")
-        st.caption(f"👉 {format_krw(st.session_state.b_cash_krw)}")
-        
-        st.number_input("B: 달러 예수금", min_value=0, step=100, key="b_cash_usd", on_change=save_data, format="%d")
-        st.caption(f"👉 ${st.session_state.b_cash_usd:,.2f}")
-
-    # C계좌 (V17.3 추가)
-    with st.sidebar.expander("🛡️ 계좌 C: 벙커 (세금/비상)", expanded=True):
-        st.number_input("C: 원화 예수금 (수익금 22%)", min_value=0, step=100000, key="c_cash_krw", on_change=save_data, format="%d")
-        st.caption(f"👉 {format_krw(st.session_state.c_cash_krw)}")
-
-    st.sidebar.markdown("---")
+        # 폼 제출 버튼
+        submit_button = st.form_submit_button("💾 자산 정보 저장 및 업데이트", use_container_width=True)
+        if submit_button:
+            save_data()
+            st.success("✅ 저장 완료!")
     
     # --- 자동 손익 판단 로직 (Ver 20.0 Dual Engine) ---
     tqqq_qty = st.session_state.a_tqqq_qty + st.session_state.b_tqqq_qty
@@ -459,13 +540,13 @@ if mkt is not None:
     u3.metric("USD 주봉 RSI", f"{mkt['usd_rsi_wk']:.1f}", get_rsi_status(mkt['usd_rsi_wk']))
     u4.metric("USD MDD", f"{mkt['usd_mdd']*100:.2f}%", get_mdd_status(mkt['usd_mdd']))
 
-    # Macro Info (V19.0)
-    m1, m2, m3, m4 = st.columns(4)
+    # Macro Info (V19.0 + Ver 20.2 확장)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     
     vix = mkt['vix']
     # VIX Label: 20 기준 (방어) / 30 기준 (공포/매수)
-    vix_label = "안정" if vix < 20 else ("🚨 공포 (Panic)" if vix > 30 else "🛡️ 방어 (Caution)")
-    m1.metric("VIX (공포지수)", f"{vix:.2f}", vix_label)
+    vix_label = "✅ 안정" if vix < 20 else ("🚨 공포" if vix > 30 else "🛡️ 방어")
+    m1.metric("VIX (변동성)", f"{vix:.2f}", vix_label)
     
     tnx = mkt['tnx']
     tnx_label = "양호" if tnx < 4.0 else "⚠️ 고금리 주의"
@@ -477,7 +558,107 @@ if mkt is not None:
     if mkt['is_spread_normalization']: spread_msg = "⚠️ 붕괴 임박 (Normalization)"
     m3.metric("10Y-3M 금리차", f"{spread:.2f}%p", spread_msg)
     
-    m4.empty() # Spacer
+    # [Ver 20.2] CNN 공포탐욕지수
+    fg_val = mkt['fear_greed_value']
+    fg_text = mkt['fear_greed_text']
+    if fg_val <= 25:
+        fg_emoji = "😱 극도 공포"
+    elif fg_val <= 45:
+        fg_emoji = "😰 공포"
+    elif fg_val <= 55:
+        fg_emoji = "😐 중립"
+    elif fg_val <= 75:
+        fg_emoji = "😊 탐욕"
+    else:
+        fg_emoji = "🤑 극도 탐욕"
+    m4.metric("공포탐욕지수", f"{fg_val}", fg_emoji)
+    
+    # [Ver 20.2] 버핏지수
+    buffett = mkt['buffett_indicator']
+    if buffett > 0:
+        if buffett < 90:
+            buffett_label = "💎 저평가"
+        elif buffett < 115:
+            buffett_label = "✅ 적정"
+        elif buffett < 135:
+            buffett_label = "⚠️ 고평가"
+        elif buffett < 200:
+            buffett_label = "🚨 심각한 고평가"
+        else:
+            buffett_label = "💥 역사적 버블"
+        m5.metric("버핏지수", f"{buffett:.1f}%", buffett_label)
+    else:
+        m5.metric("버핏지수", "N/A", "데이터 없음")
+    
+    m6.empty() # Spacer
+    
+    # [Ver 20.2] 지표 해석 가이드 (Expander 방식 - 즉시 펼침)
+    with st.expander("📊 VIX 지수 해석 가이드 (변동성 지수)", expanded=False):
+        st.markdown(f"""
+        ### 현재 지수: **{vix:.2f}** ({vix_label})
+        
+        | 구간 | 의미 | 시장 상태 | 투자 전략 | 현재 상태 |
+        |:---:|:---|:---|:---|:---:|
+        | **~15** | ✅ **안정** | 매우 평온 | 정상 운용 | {'✅' if vix < 15 else ''} |
+        | **15~20** | 😐 **보통** | 정상 변동성 | 정상 운용 | {'✅' if 15 <= vix < 20 else ''} |
+        | **20~30** | 🛡️ **방어** | 변동성 증가 | **방어 모드 발동** | {'✅' if 20 <= vix < 30 else ''} |
+        | **30~40** | 🚨 **공포** | 패닉 시작 | 🟢 **매수 기회 탐색** | {'✅' if 30 <= vix < 40 else ''} |
+        | **40+** | 💥 **극도 공포** | 시스템 붕괴급 | 🟢 **적극 매수 (역발상)** | {'✅' if vix >= 40 else ''} |
+        
+        #### 📈 역사적 사례
+        - **2008년 금융위기:** VIX **89.53** (역대 최고)
+        - **2020년 코로나:** VIX **82.69**
+        - **2022년 러시아 침공:** VIX **36.45**
+        - **평상시:** VIX **12~18**
+        
+        #### 💡 CRO의 조언
+        - **VIX 20 이상 5일 안착:** 시스템 **방어 모드** 자동 발동 (주식 목표 -10%p, RSI 매도 기준 75로 강화)
+        - **VIX 30 이상:** 계좌 B(스나이퍼) 탄환 준비. MDD -15% 이상과 겹치면 **적극 매수**.
+        - **VIX 40 이상:** 역사적 폭락장. **"남들이 공포할 때 탐욕하라"** 실천 시점.
+        """)
+    
+    with st.expander("📊 CNN 공포탐욕지수 해석 가이드", expanded=False):
+        st.markdown(f"""
+        ### 현재 지수: **{fg_val}** ({fg_emoji})
+        
+        | 구간 | 의미 | 투자 전략 | 현재 상태 |
+        |:---:|:---|:---|:---:|
+        | **0~25** | 😱 **극도 공포 (Extreme Fear)** | 🟢 **적극 매수 기회** | {'✅' if fg_val <= 25 else ''} |
+        | **25~45** | 😰 **공포 (Fear)** | 🟢 매수 검토 | {'✅' if 25 < fg_val <= 45 else ''} |
+        | **45~55** | 😐 **중립 (Neutral)** | ⚪ 관망 | {'✅' if 45 < fg_val <= 55 else ''} |
+        | **55~75** | 😊 **탐욕 (Greed)** | 🟡 경계 (비중 조정 검토) | {'✅' if 55 < fg_val <= 75 else ''} |
+        | **75~100** | 🤑 **극도 탐욕 (Extreme Greed)** | 🔴 **매도/현금 확보** | {'✅' if fg_val > 75 else ''} |
+        
+        #### 💡 CRO의 조언
+        - **극도 공포 (0~25):** 시장이 패닉 상태. 계좌 B(스나이퍼) 탄환 장전 시점.
+        - **탐욕 (55~75):** 시장 과열 조짐. RSI와 함께 확인 필요.
+        - **극도 탐욕 (75+):** RSI 80과 겹치면 **강력한 매도 신호**.
+        """)
+    
+    with st.expander("📊 버핏지수 해석 가이드", expanded=False):
+        st.markdown(f"""
+        ### 현재 지수: **{buffett:.1f}%** ({buffett_label})
+        
+        | 구간 | 의미 | 시장 상태 | 현재 상태 |
+        |:---:|:---|:---|:---:|
+        | **~90%** | 💎 **현저한 저평가** | 강력 매수 기회 | {'✅' if buffett < 90 else ''} |
+        | **90~115%** | ✅ **적정 가치** | 정상 밸류에이션 | {'✅' if 90 <= buffett < 115 else ''} |
+        | **115~135%** | ⚠️ **다소 고평가** | 경계 구간 | {'✅' if 115 <= buffett < 135 else ''} |
+        | **135~200%** | 🚨 **심각한 고평가** | 버블 경계 | {'✅' if 135 <= buffett < 200 else ''} |
+        | **200%+** | 💥 **역사적 버블** | 2000년 닷컴버블 수준 | {'✅' if buffett >= 200 else ''} |
+        
+        #### 📈 역사적 사례
+        - **1972년 (117%):** 폭락 직전 고점
+        - **2000년 (153%):** 닷컴버블 붕괴
+        - **2008년 (105%):** 금융위기 직전
+        - **2021년 (215%):** 코로나 유동성 버블
+        - **2024년 현재 ({buffett:.1f}%):** {'⚠️ 역사적 최고 수준' if buffett >= 200 else '고평가 구간'}
+        
+        #### 💡 CRO의 조언
+        - **200% 이상:** 자산이 불어날수록 **현금 비중 확대 필수**. 보수적 글라이드 패스 전략이 빛을 발하는 시점.
+        - **전략:** Phase 3 이상에서는 주식 비중을 60% 이하로 유지하여 버블 붕괴 시 방어력 확보.
+        """)
+    
 
     # --- 2. 포트폴리오 진단 ---
     st.markdown("---")

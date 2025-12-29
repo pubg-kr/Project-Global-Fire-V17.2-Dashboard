@@ -1,5 +1,17 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 20.3 (Performance Optimization)
+- **⚡ 입력 속도 개선**: 사이드바 자산 입력 방식을 Form 형태로 변경.
+    - 기존: 입력할 때마다 전체 리로드되어 끊김 발생.
+    - 개선: [저장] 버튼을 누를 때만 일괄 업데이트하여 쾌적한 입력 가능.
+
+### Ver 20.2 (Bubble Indicators)
+- **📊 버블 지수 추가 (Bubble Indicators)**:
+    - **CNN 공포탐욕지수 (Fear & Greed Index)**: CNN 실제 주식 시장 지수 웹 스크래핑 (0~100).
+    - **버핏지수 (Buffett Indicator)**: Wilshire 5000 기반 시가총액/GDP 비율 측정.
+    - 매크로 대시보드 6-Column 확장 (VIX / 금리 / 금리차 / 공포탐욕 / 버핏지수).
+- **🔧 시스템 안정성**: BeautifulSoup4 추가, CNN API 직접 연동, Fallback 로직 구현.
+
 ### Ver 20.1 (Conservative Glide Path)
 - **📉 보수적 글라이드 패스 (Granular Phases)**:
     - 자산 구간을 더 세분화하여 리스크 관리 강화. (Phase 0~5 재설계)
