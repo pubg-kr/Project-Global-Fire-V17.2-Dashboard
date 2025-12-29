@@ -317,7 +317,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 20.3 (Dual Engine Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 20.7 (Dual Engine Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -1002,6 +1002,16 @@ if mkt is not None:
             st.markdown(release_notes)
         except Exception as e:
             st.warning("릴리즈 노트를 불러올 수 없습니다.")
+    
+    # --- 6. 코어 로직 (Master Protocol) ---
+    st.markdown("---")
+    with st.expander("🏛️ 코어 로직 (Master Protocol)", expanded=False):
+        try:
+            with open("TradingCoreLogic.md", "r", encoding="utf-8") as f:
+                core_logic = f.read()
+            st.markdown(core_logic)
+        except Exception as e:
+            st.warning("코어 로직 문서를 불러올 수 없습니다.")
 
 else:
     st.warning("데이터 로딩 중... (잠시만 기다려주세요)")
