@@ -317,7 +317,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 20.0 (Dual Engine Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 20.3 (Dual Engine Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -673,35 +673,72 @@ if mkt is not None:
     else:
         st.progress(1.0, text="🏆 Final Phase 달성! (은퇴 준비 완료)")
 
-    # 포트폴리오 핵심 지표 (7-Column Layout)
-    p1, p2, p3, p4, p5, p6, p7 = st.columns(7)
+    # [Ver 20.4] 3단 레이어 포트폴리오 진단
+    
+    # === 1단: 통합 정보 (2줄 × 4컬럼) ===
+    st.markdown("### 📊 통합 포트폴리오")
+    
+    # 첫 번째 줄: Phase, 자산, 원금, 수익률
+    row1_col1, row1_col2, row1_col3, row1_col4 = st.columns(4)
     phase_info = PHASE_CONFIG[current_phase]
     
-    # 1. Phase
-    p1.metric("현재 Phase", f"{phase_info['name']}", f"{mode_label}")
+    row1_col1.metric("현재 Phase", f"{phase_info['name']}", f"{mode_label}")
+    row1_col2.metric("총 자산", format_krw(total_assets))
+    row1_col3.metric("통합 투자 원금", format_krw(total_invested_krw))
     
-    # 2. 총 자산
-    p2.metric("총 자산 (합산)", format_krw(total_assets))
-    
-    # 3. 통합 수량 (New) - 주석 처리
-    # p3.metric("통합 보유 수량", f"{total_qty:,.2f}주")
-
-    # 4. 통합 평단
-    p4.metric("총 매수 원금", format_krw(total_invested_krw))
-    
-    # 5. 현재 수익률
     if total_invested_krw > 0:
         st_emoji = "🔴" if not is_loss else "🔵"
-        p5.metric("현재 수익률", f"{profit_rate:.2f}%", f"{st_emoji} 상태")
+        row1_col4.metric("통합 수익률", f"{profit_rate:.2f}%", f"{st_emoji} 상태")
     else:
-        p5.metric("현재 수익률", "0%", "대기")
-
-    # 6. 주식 비중
-    p6.metric("주식 비중 (TQ+USD)", f"{current_stock_ratio*100:.1f}%", f"목표: {target_stock_ratio*100:.0f}%")
+        row1_col4.metric("통합 수익률", "0%", "대기")
     
-    # 7. 현금 비중
-    p7.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100:.0f}%")
+    # 두 번째 줄: 주식평가금, 현금보유액, 주식비중, 현금비중
+    row2_col1, row2_col2, row2_col3, row2_col4 = st.columns(4)
+    
+    row2_col1.metric("총 주식 평가금", format_krw(total_stock_krw))
+    row2_col2.metric("총 현금 보유액", format_krw(total_cash_krw))
+    
+    # TQQQ:USD 비율
+    tqqq_ratio_display = total_tqqq_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+    usd_ratio_display = total_usd_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+    tqqq_pct = int(tqqq_ratio_display * 100)
+    usd_pct = int(usd_ratio_display * 100)
+    row2_col3.metric("주식 비중", 
+                     f"{current_stock_ratio*100:.1f}%", 
+                     f"목표: {target_stock_ratio*100:.0f}% (TQ {tqqq_pct}:{usd_pct} USD)")
+    row2_col4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100:.0f}%")
 
+    # === 2단: TQQQ 상세 정보 ===
+    st.markdown("### 🚀 TQQQ (나스닥 100 3배)")
+    tq1, tq2, tq3, tq4, tq5, tq6 = st.columns(6)
+    
+    tqqq_qty = st.session_state.a_tqqq_qty + st.session_state.b_tqqq_qty
+    tqqq_avg = tqqq_invested / tqqq_qty if tqqq_qty > 0 else 0
+    tqqq_profit = ((total_tqqq_krw - tqqq_invested) / tqqq_invested * 100) if tqqq_invested > 0 else 0
+    
+    tq1.metric("보유 수량", f"{tqqq_qty:.2f}주")
+    tq2.metric("평균 단가", format_krw(tqqq_avg))
+    tq3.metric("현재가", format_krw(tqqq_krw))
+    tq4.metric("투자 원금", format_krw(tqqq_invested))
+    tq5.metric("평가 금액", format_krw(total_tqqq_krw))
+    tq6.metric("수익률", f"{tqqq_profit:.2f}%", "🔴" if tqqq_profit >= 0 else "🔵")
+
+    # === 3단: USD 상세 정보 ===
+    st.markdown("### 💎 USD (반도체 2배)")
+    us1, us2, us3, us4, us5, us6 = st.columns(6)
+    
+    usd_qty = st.session_state.a_usd_qty + st.session_state.b_usd_qty
+    usd_avg = usd_invested / usd_qty if usd_qty > 0 else 0
+    usd_profit = ((total_usd_krw - usd_invested) / usd_invested * 100) if usd_invested > 0 else 0
+    
+    us1.metric("보유 수량", f"{usd_qty:.2f}주")
+    us2.metric("평균 단가", format_krw(usd_avg))
+    us3.metric("현재가", format_krw(usd_stock_krw))
+    us4.metric("투자 원금", format_krw(usd_invested))
+    us5.metric("평가 금액", format_krw(total_usd_krw))
+    us6.metric("수익률", f"{usd_profit:.2f}%", "🔴" if usd_profit >= 0 else "🔵")
+
+    st.markdown("---")
     if is_loss: st.error("🛑 [손실 중] 절대 방패 가동: 매도 금지")
     else: st.success("✅ [수익 중] 정상 로직 가동")
 
@@ -752,10 +789,57 @@ if mkt is not None:
                  buy_amt_monthly = st.session_state.monthly_contribution * squeeze_ratio
                  monthly_msg = f"🩸 **기회 (Squeeze)**: 쥐어짜기 ({format_krw(buy_amt_monthly)}) 매수 (TQQQ:USD = 1:1)."
     
-    # [요청] 일일 적립액 표시 (매수 금액이 0보다 클 때만)
+    # [Ver 20.4] 일일 적립액 및 스마트 비율 계산
     if "매수" in monthly_msg and "금지" not in monthly_msg:
-         # 메시지에서 금액 추출이 어려우므로, 계산된 로직을 재사용해야 하나, 단순화를 위해 20으로 나눈 멘트만 추가
-         monthly_msg += " (일일 1/20 분할 매수 권장)"
+        # 매수 금액 추출 (전시 상황 or 평시)
+        if qqq_mdd <= -0.3:
+            buy_amt = st.session_state.monthly_contribution
+        elif qqq_rsi >= 60:
+            buy_amt = st.session_state.monthly_contribution * target_stock_ratio
+        else:
+            # 기회 구간
+            if total_cash_krw > (total_assets * target_cash_ratio):
+                buy_amt = (st.session_state.monthly_contribution * target_stock_ratio) * 1.5
+            else:
+                squeeze_ratio = min(target_stock_ratio + 0.1, 1.0)
+                buy_amt = st.session_state.monthly_contribution * squeeze_ratio
+        
+        daily_amt = buy_amt / 20
+        
+        # [Ver 20.6] 스마트 리밸런싱 - 매도 없이 월 적립으로만 50:50 복원
+        tqqq_current_ratio = total_tqqq_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+        usd_current_ratio = total_usd_krw / total_stock_krw if total_stock_krw > 0 else 0.5
+        
+        # 기본 50:50
+        tqqq_input_ratio = 0.5
+        usd_input_ratio = 0.5
+        balance_msg = ""
+        
+        # 동적 조정: 현재 비중 차이에 따라 10:0 ~ 0:10까지 가능
+        # 목표: 적은 쪽에 100% 투입하여 최대한 빠르게 리밸런싱
+        ratio_gap = abs(tqqq_current_ratio - 0.5)
+        
+        if ratio_gap > 0.05:  # 5%p 이상 벌어졌을 때만 조정
+            if tqqq_current_ratio > 0.5:  # TQQQ 과중 -> USD만 매수
+                # TQQQ가 55%면 USD에 100% 투입
+                # TQQQ가 70%면 USD에 100% 투입
+                usd_input_ratio = 1.0
+                tqqq_input_ratio = 0.0
+                balance_msg = f"⚖️ **리밸런싱 모드**: TQQQ {tqqq_current_ratio*100:.1f}% → USD만 매수하여 50:50 복원 중"
+            else:  # USD 과중 -> TQQQ만 매수
+                tqqq_input_ratio = 1.0
+                usd_input_ratio = 0.0
+                balance_msg = f"⚖️ **리밸런싱 모드**: USD {usd_current_ratio*100:.1f}% → TQQQ만 매수하여 50:50 복원 중"
+        
+        tqqq_daily = daily_amt * tqqq_input_ratio
+        usd_daily = daily_amt * usd_input_ratio
+        
+        monthly_msg += f"\n\n📅 **[일일 자동 적립 가이드 (20거래일 기준)]**\n"
+        monthly_msg += f"- **총 일일 매수금:** {format_krw(daily_amt)}\n"
+        monthly_msg += f"- **TQQQ ({int(tqqq_input_ratio*100)}%):** {format_krw(tqqq_daily)}\n"
+        monthly_msg += f"- **USD ({int(usd_input_ratio*100)}%):** {format_krw(usd_daily)}\n"
+        if balance_msg:
+            monthly_msg += f"\n{balance_msg}"
 
     # --- 2. 보유 자산 운용 (Asset Management) ---
     final_action = ""
