@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 20.0)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 20.1)
 **"The Dual Engine Strategy (AI 반도체 + 빅테크 듀얼 코어)"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -12,7 +12,8 @@
     *   *Logic:* 개별 종목의 노이즈를 배제하고, 시장 전체의 '계절'을 판단하기 위함.
 2.  **자산 기준 (Asset):** 투자는 **[TQQQ (50%)]**와 **[USD (50%)]**의 듀얼 엔진으로 수행합니다.
     *   **TQQQ:** 나스닥 100 3배 (전체 성장 + 복리 엔진)
-    *   **USD:** 반도체 2배 (주도주 폭발력 + 하락장 방어)
+    *   **USD:** ProShares Ultra Semiconductors (반도체 2배 ETF)
+        *   *Note:* 달러(Cash)가 아님! 반도체 2배 레버리지 ETF임.
 
 ## 0.5 🚨 버블 붕괴 조기 경보 (Bubble Warning)
 **"파티가 끝나기 전에 문 근처로 이동하십시오."**
@@ -115,14 +116,14 @@
 
 ## 4. 환경 변수 설정 (Configuration)
 
-| Phase | 자산 구간 | **Target_Stock (주식목표)** | **Target_Cash (현금목표)** |
-| :--- | :--- | :---: | :---: |
-| **Phase 0** | **0 ~ 1억 (Seed)** | **90%** | **10%** |
-| Phase 1 | ~ 5억 | 80% | 20% |
-| Phase 2 | ~ 10억 | 70% | 30% |
-| Phase 3 | ~ 20억 | 60% | 40% |
-| Phase 4 | ~ 25억 | 50% | 50% |
-| Phase 5 | 30억+ | 40% | 60% |
+| Phase | 자산 구간 | **Target_Stock (주식목표)** | **Target_Cash (현금목표)** | 비고 |
+| :--- | :--- | :---: | :---: | :--- |
+| **Phase 0** | **~ 1억** | **90%** | **10%** | 시스템 가동 및 시드 확보 |
+| Phase 1 | 1억 ~ 3억 | 80% | 20% | 표준 운용 (안정성 강화) |
+| Phase 2 | 3억 ~ 7억 | 70% | 30% | 리스크 관리 (본격 방어) |
+| Phase 3 | 7억 ~ 15억 | 60% | 40% | Critical Mass (자산 보존) |
+| Phase 4 | 15억 ~ 25억 | 50% | 50% | 은퇴 준비 (변동성 최소화) |
+| Phase 5 | 25억 ~ 30억+ | 40% | 60% | Final Exit (은퇴 확정) |
 
 ---
 

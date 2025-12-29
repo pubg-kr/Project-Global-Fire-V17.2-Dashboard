@@ -69,11 +69,11 @@ st.set_page_config(page_title="Global Fire CRO V20.0", layout="wide", page_icon=
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
-    1: {"limit": 500000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (가속)"},
-    2: {"limit": 1000000000, "target_stock": 0.7, "target_cash": 0.3, "name": "Phase 2 (상승)"},
-    3: {"limit": 2000000000, "target_stock": 0.6, "target_cash": 0.4, "name": "Phase 3 (순항)"},
-    4: {"limit": 2500000000, "target_stock": 0.5, "target_cash": 0.5, "name": "Phase 4 (안전)"},
-    5: {"limit": float('inf'), "target_stock": 0.4, "target_cash": 0.6, "name": "Phase 5 (졸업)"}
+    1: {"limit": 300000000, "target_stock": 0.8, "target_cash": 0.2, "name": "Phase 1 (Standard)"},
+    2: {"limit": 700000000, "target_stock": 0.7, "target_cash": 0.3, "name": "Phase 2 (Defense)"},
+    3: {"limit": 1500000000, "target_stock": 0.6, "target_cash": 0.4, "name": "Phase 3 (Critical Mass)"},
+    4: {"limit": 2500000000, "target_stock": 0.5, "target_cash": 0.5, "name": "Phase 4 (Retirement Prep)"},
+    5: {"limit": float('inf'), "target_stock": 0.4, "target_cash": 0.6, "name": "Phase 5 (Final Exit)"}
 }
 
 PROTOCOL_TEXT = """
@@ -731,112 +731,12 @@ if mkt is not None:
     # --- 5. 릴리즈 노트 (Update History) ---
     st.markdown("---")
     with st.expander("📅 릴리즈 노트 (Update History)", expanded=False):
-        st.markdown("""
-        ### Ver 20.0 (Dual Engine)
-        - **🚀 듀얼 엔진 전략 (The Dual Engine Strategy)**:
-            - **포트폴리오 대개편:** [TQQQ 100%] -> **[TQQQ 50% + USD 50%]**
-            - **TQQQ:** 나스닥 100 3배 (안정성 및 전체 성장)
-            - **USD:** 반도체 2배 (AI 주도주 폭발력 + 하락장 방어)
-            - **시스템 통합:** USD 데이터 실시간 연동 및 통합 자산 계산 로직 구현.
-        - **⚖️ 듀얼 리밸런싱 (Dual Rebalancing)**:
-            - TQQQ와 USD 간의 괴리율이 **10%p 이상** 발생 시, 리밸런싱 시그널 자동 생성. (잦은 매매 방지)
-
-        ### Ver 19.3.4 (Trend Health Check)
-        - **🛡️ 3중 방어 체계 완성 (Triple Guard)**:
-            - **Trend Health Check**: QQQ 주봉 20선(생명선) 하향 이탈 후 **2주 이상 회복 실패** 시, '상승 추세 종료'로 간주하여 방어 모드 발동.
-            - 기존 [거시경제(금리) / 심리(VIX)]에 더해 [가격 추세]까지 확인하는 빈틈없는 방어막 구축.
-
-        ### Ver 19.3.3 (Optimal-Crisis-Response)
-        - **📉 위기 대응 로직 최적화 (Efficiency Optimized)**:
-            - **투입 타이밍 변경**: 기존 -20/-30/-40/-50% 에서 **-15/-25/-35/-45%** 로 변경.
-            - **-15% (Deep Correction)**: Sniper 계좌 첫 발사 시점. 잔파도(-10%)는 무시하고 의미 있는 조정부터 대응.
-            - **-45% (All-In)**: -50%라는 희박한 확률을 기다리기보다, -45%에서 사실상 모든 현금을 투입하여 반등 수익 극대화.
-            - **Golden Ratio**: 20% / 30% / 30% / 20% 의 피라미드형 분할 매수 적용.
-
-        ### Ver 19.3.2 (Precise Bubble Watch)
-        - **🛡️ 방어 모드 로직 고도화 (Fine-Tuning)**:
-            - **VIX 20 Trigger**: VIX가 일시적 스파이크가 아닌 **20 이상에서 5거래일 안착** 시 방어 모드 발동.
-            - **Yield Spread Trigger**: 장단기 금리차가 **역전 상태에서 정상화(0 위로 복귀)** 될 때를 진짜 위험(Crisis)으로 간주.
-            - **복귀 신호 (Re-entry)**: VIX 20 미만 안정화, RSI 바닥 탈출, 금리차 충격 해소 시 자동 복귀 안내.
-        
-        ### Ver 19.3.1 (Auto-Bubble Watch)
-        - **🤖 자동 감지 지표 탑재 (Auto-Detection)**:
-            - **장단기 금리차 (10Y-3M)**: 연준(Fed)의 경기침체 예측 핵심 지표인 '3개월물' 데이터를 실시간 연동.
-            - **로직 강화**: VIX 25 이상 **또는** 금리차 역전(마이너스) 시 방어 모드 즉시 자동 발동.
-            - 이제 사용자가 체크하지 않아도 시스템이 먼저 위험을 감지합니다.
-
-        ### Ver 19.3 (Bubble Watch)
-        - **🚨 버블 붕괴 조기 경보 (Early Warning)**:
-            - VIX(공포지수) 25 이상 급등 시 **'방어 모드'** 자동 발동.
-            - **[방어 모드 효과]**: 주식 목표 비중 -10%p 축소 / RSI 매도 기준 80->75 강화.
-            - 시장 상황판에 '이상 징후 감지(Manual Override)' 체크박스 추가 (수동 발동 가능).
-            
-        ### Ver 19.2 (Fine-Tuning)
-        - **🛡️ 손실 정의 현실화**: 수수료/슬리피지를 고려하여 손실 판단 기준을 0% 미만에서 **+1.5% 미만**으로 상향 조정. (실질적 원금 보존)
-        - **🌱 Phase 0 (Seed) 신설**: 자산 1억 미만 초기 단계에서는 **주식 90% : 현금 10%**로 공격적 운용 허용.
-
-        ### Ver 19.1.1 (Critical Logic Patch)
-        - **🚦 논리 충돌 해결 (Conflict Resolution)**: 'RSI 80 과열'과 '계좌 손실'이 동시에 발생할 경우, **'손실 중 매도 금지'를 최우선 순위**로 확정. (자산 영구 손실 방지)
-        - **⚖️ 지표 기준 명확화**: 모든 기술적 지표(RSI, MDD)는 변동성 왜곡이 없는 **QQQ**를 기준으로 함을 명시.
-
-        ### Ver 19.1 - War Time Protocol
-        - **🛡️ 전시 상황 매수 로직**: MDD -30% 이하 폭락장에서는 RSI 지표를 무시하고 **월급의 100%를 TQQQ 매수**에 투입. (기회 비용 최소화)
-        
-        ### Ver 19.0 (Institutional Grade)
-        - **🌍 매크로 대시보드 (Macro Dashboard)**:
-            - **VIX (공포지수)**: 시장의 공포/탐욕 단계(안정/주의/공포)를 실시간 모니터링.
-            - **US 10Y (국채금리)**: 기술주의 최대 적, 금리 동향을 한눈에 파악.
-            - 단순 개별 종목 분석을 넘어 '거시 경제(Macro)' 흐름을 읽는 기관급 기능 탑재.
-        - **📊 멀티 타임프레임 차트 (Multi-Timeframe Analysis)**:
-            - **[일봉] | [주봉] | [월봉]** 탭 분리로 단기/중기/장기 추세 입체적 분석 가능.
-        - **📈 고급 기술적 분석 (Advanced Techincal)**:
-            - **이동평균선 (MA)**: MA20(생명선), MA60(수급선) 자동 오버레이.
-            - 추세의 정배열/역배열 상태를 시각적으로 즉시 판별.
-
-        ### Ver 18.0 - The Ultimate Logic
-        - **📉 MDD 대응 로직 세분화 (Precision Strike)**:
-            - 기존 3단계(-20, -30, -50%)에서 **4단계(-20, -30, -40, -50%)**로 확장.
-            - **-40% (금융위기)** 구간 신설: 현금 30% 추가 투입으로 하락장 평단가 관리 강화.
-            - "분할 매수의 마법"을 극대화하여 폭락장 방어력 증대.
-
-        ### Ver 17.9 - Deep Analytics & UI Reform
-        - **🤖 자동 손익 판단 엔진**: 수동 라디오 버튼 삭제. 보유 수량과 평단가를 기반으로 실시간 손익 상태(수익/손실) 자동 판별.
-        - **⚡ 실시간 평가금 계산**: TQQQ 수량 × 실시간 현재가(원화) 연동으로 1원 단위까지 정확한 자산 가치 산출.
-        - **📈 심층 시장 분석 (Deep Analytics)**: TQQQ의 주봉/월봉 RSI 및 MDD 지표 추가 (QQQ와 동일 수준 분석).
-        - **🛡️ Loss Protection (절대 방패)**: 손실 구간 진입 시 모든 매도 시그널을 강제로 차단하고 홀딩/적립을 유도하는 안전장치 강화.
-        - **🖥️ UI/UX 전면 개편**:
-            - 포트폴리오 진단 섹션 7-Column 확장 (통합 수량, 평단, 수익률 등 핵심 지표 일렬 배치).
-            - 가격 표시 방식 개선 (달러/원화 병기).
-            - Tax Shield 로직 고도화 (A/B 계좌 평단 비교 후 절세 매도 가이드).
-
-        ### Ver 17.8 - The Tax Shield
-        - **🛡️ 계좌 C (The Bunker) 신설**: 세금 및 비상금 격리용 계좌 추가 (수익금의 22% 자동 이체 규칙).
-        - **🧾 Tax Shield 로직 탑재**: 광기 매도/리밸런싱 매도 시 세금 격리(22%) 알림 메시지 출력.
-        - **🧮 자산 로직 고도화**: 총 자산 계산에 계좌 C 포함하여 Phase 판단 정확도 향상.
-        - **📝 릴리즈 노트 추가**: 앱 내에서 업데이트 내역 확인 기능 추가.
-
-        ### Ver 17.7 (Local Persistence)
-        - **💾 데이터 영구 저장**: 브라우저를 닫아도 자산 데이터가 유지되도록 로컬 저장소(JSON) 연동.
-        - **⚡ 속도 개선**: 데이터 로딩 최적화.
-
-        ### Ver 17.6
-        - 🛠️ **안정화 패치**: V17.5 이슈 롤백 및 로직 검증.
-        - 📖 **사용 가이드**: 업데이트 사용 가이드 문서화.
-
-        ### Ver 17.5
-        - ✨ **기능 개선**: 사용자 피드백 반영 및 UI 가독성 패치.
-
-        ### Ver 17.4 - The Dual Account
-        - **🏦 2계좌 전략 (Two-Account Strategy) 도입**:
-            - **계좌 A (The Vault)**: 무한 적립 전용 (매도 금지).
-            - **계좌 B (The Sniper)**: 트레이딩 및 리밸런싱 전용.
-        - 세금 문제 회피 및 매매 효율성 증대.
-
-        ### 초기 버전 (Early Access)
-        - **🔔 텔레그램 알림**: 위기 상황(MDD) 발생 시 알림 봇 기능 추가.
-        - **💱 환율 연동**: 달러/원화 자동 환산 및 통합 자산 계산.
-        - **📊 차트 시각화**: QQQ 주봉, RSI, MDD 동적 차트 구현.
-        """)
+        try:
+            with open("ReleaseNotes.md", "r", encoding="utf-8") as f:
+                release_notes = f.read()
+            st.markdown(release_notes)
+        except Exception as e:
+            st.warning("릴리즈 노트를 불러올 수 없습니다.")
 
 else:
     st.warning("데이터 로딩 중... (잠시만 기다려주세요)")
