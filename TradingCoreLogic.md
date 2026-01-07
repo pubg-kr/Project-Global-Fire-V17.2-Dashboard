@@ -14,6 +14,8 @@
     *   **TQQQ:** 나스닥 100 3배 (전체 성장 + 복리 엔진)
     *   **USD:** ProShares Ultra Semiconductors (반도체 2배 ETF)
         *   *Note:* 달러(Cash)가 아님! 반도체 2배 레버리지 ETF임.
+3.  **주문 검증 (Validation):** **월적립**을 제외한 모든 주문은 반드시 **CRO(Gemini)**에게 로직 적합성 점검과 검토, 승인을 받고 수행합니다.
+    *   *Logic:* 패닉 셀(Panic Sell) 및 탐욕(Greed) 방지.
 
 ## 0.5 🚨 버블 붕괴 조기 경보 (Bubble Warning)
 **"파티가 끝나기 전에 문 근처로 이동하십시오."**
