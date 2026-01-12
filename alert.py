@@ -33,20 +33,21 @@ def check_market_status():
     print("🔍 시장 데이터 분석 중... (V22.4 Daily Defense)")
     
     try:
-        # 데이터 수집 (QQQ, TQQQ, VIX, TNX, IRX)
+        # 데이터 수집 (QQQ, TQQQ, SOXX, VIX, TNX, IRX)
         # 일봉 200선을 위해 1년 이상 데이터 필요
         qqq = yf.download("QQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
         tqqq = yf.download("TQQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
+        soxx = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False) # 반도체 지수 추가
         vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=False)
         tnx = yf.download("^TNX", period="1y", progress=False, auto_adjust=False) # 10년물
         irx = yf.download("^IRX", period="1y", progress=False, auto_adjust=False) # 3개월물
         
-        if qqq.empty:
+        if qqq.empty or soxx.empty:
             print("❌ 데이터 수집 실패")
             return
 
         # MultiIndex 처리
-        for df in [qqq, tqqq, vix, tnx, irx]:
+        for df in [qqq, tqqq, soxx, vix, tnx, irx]:
             if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
 
         # 1. 지표 계산 (QQQ)
@@ -59,14 +60,31 @@ def check_market_status():
         current_mdd = float(qqq['DD'].iloc[-1])
         mdd_pct = current_mdd * 100
         
-        # [Ver 22.4] Winter Protocol: 일봉 200선 (MA200)
+        # [Ver 22.5] Winter Protocol: QQQ & SOXX Dual Check
+        # QQQ MA200
         qqq['MA200'] = qqq['Close'].rolling(window=200).mean()
-        current_price = float(qqq['Close'].iloc[-1])
-        current_ma200 = float(qqq['MA200'].iloc[-1])
+        qqq_price = float(qqq['Close'].iloc[-1])
+        qqq_ma200 = float(qqq['MA200'].iloc[-1])
+        
+        # SOXX MA200
+        soxx['MA200'] = soxx['Close'].rolling(window=200).mean()
+        soxx_price = float(soxx['Close'].iloc[-1])
+        soxx_ma200 = float(soxx['MA200'].iloc[-1])
         
         is_winter = False
-        if not pd.isna(current_ma200):
-            is_winter = current_price < current_ma200
+        winter_cause = []
+        
+        # QQQ Check
+        if not pd.isna(qqq_ma200):
+            if qqq_price < qqq_ma200:
+                is_winter = True
+                winter_cause.append("QQQ")
+        
+        # SOXX Check
+        if not pd.isna(soxx_ma200):
+            if soxx_price < soxx_ma200:
+                is_winter = True
+                winter_cause.append("SOXX")
 
         # TQQQ 지표
         tqqq['Roll_Max'] = tqqq['Close'].rolling(window=252, min_periods=1).max()
@@ -80,18 +98,22 @@ def check_market_status():
         current_irx = float(irx['Close'].iloc[-1]) if not irx.empty else 0
         current_spread = current_tnx - current_irx
 
-        # 2. 알림 메시지 구성 (Logic V22.4)
+        # 2. 알림 메시지 구성 (Logic V22.5)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V22.4] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V22.5] 긴급 브리핑** 🔥\n\n"
         
         # (0) 계절 변화 감지 (최우선 순위)
         season_status = "🔴 겨울 (Winter)" if is_winter else "🟢 봄 (Spring)"
         if is_winter:
+             cause_str = ", ".join(winter_cause)
              msg += f"❄️ **[겨울 모드 작동 중]**\n"
-             msg += f"- QQQ ${current_price:.2f} < 200일선 ${current_ma200:.2f}\n"
+             msg += f"- 원인: **{cause_str}** 200일선 붕괴\n"
+             msg += f"- QQQ: ${qqq_price:.2f} vs ${qqq_ma200:.2f}\n"
+             msg += f"- SOXX: ${soxx_price:.2f} vs ${soxx_ma200:.2f}\n"
              msg += "👉 **ACTION:** 현금 50% 확보 (부족 시 매도). 월급 전액 현금 적립.\n\n"
-             # 겨울 진입 초기(200일선 근처)라면 알림 트리거
-             if abs(current_price - current_ma200) / current_price < 0.01: # 1% 내외 근접 시
+             
+             # 겨울 진입 초기 알림 트리거 (QQQ 기준)
+             if abs(qqq_price - qqq_ma200) / qqq_price < 0.01: 
                  alert_triggered = True
         
         # (1) RSI 감시 (광기/과열) - 봄에만 유효
@@ -131,7 +153,9 @@ def check_market_status():
         
         # 3. 결과 전송
         if alert_triggered:
-            msg += f"📊 **Status Check**\nQQQ: ${current_price:.2f} ({season_status})\nRSI: {current_rsi:.1f}\nMDD: {mdd_pct:.2f}%\n"
+            msg += f"📊 **Status Check**\nQQQ: ${qqq_price:.2f} (RSI {current_rsi:.1f})\n"
+            msg += f"SOXX: ${soxx_price:.2f} ({'❄️' if soxx_price < soxx_ma200 else '🟢'})\n"
+            msg += f"MDD: {mdd_pct:.2f}%\n"
             msg += f"VIX: {current_vix:.1f}\n10Y-3M: {current_spread:.2f}%p"
             
             send_telegram(msg)
@@ -144,7 +168,8 @@ def check_market_status():
                 if current_spread < 0: spread_status = "⚠️ 역전"
                 
                 health_msg = f"✅ **[일일 점검] 시장 정상 ({season_status})**\n\n"
-                health_msg += f"📊 **QQQ**: ${current_price:.2f} (RSI {current_rsi:.1f})\n"
+                health_msg += f"📊 **QQQ**: ${qqq_price:.2f} (RSI {current_rsi:.1f})\n"
+                health_msg += f"📊 **SOXX**: ${soxx_price:.2f} ({'❄️' if soxx_price < soxx_ma200 else '🟢'})\n"
                 health_msg += f"📉 **MDD**: {mdd_pct:.2f}%\n"
                 health_msg += f"🛡️ **VIX**: {current_vix:.1f}\n"
                 health_msg += f"📉 **10Y-3M**: {current_spread:.2f}%p ({spread_status})"

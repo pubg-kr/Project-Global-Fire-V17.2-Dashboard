@@ -126,6 +126,11 @@ def get_market_data():
         usd_wk = yf.download("USD", interval="1wk", period="2y", progress=False, auto_adjust=False)
         usd_mo = yf.download("USD", interval="1mo", period="5y", progress=False, auto_adjust=False)
         
+        # [Ver 22.5] SOXX (반도체 지수 - 계절 판단용 & 차트용)
+        soxx_dy = yf.download("SOXX", interval="1d", period="1y", progress=False, auto_adjust=False)
+        soxx_wk = yf.download("SOXX", interval="1wk", period="2y", progress=False, auto_adjust=False)
+        soxx_mo = yf.download("SOXX", interval="1mo", period="5y", progress=False, auto_adjust=False)
+        
         # 매크로 지표 (VIX, 10년물, 3개월물) - 1년치 데이터 (추세 분석용)
         vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=False)
         tnx = yf.download("^TNX", period="1y", progress=False, auto_adjust=False) # 10년물
@@ -134,10 +139,10 @@ def get_market_data():
         # 환율
         exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
         
-        if qqq_wk.empty or exch.empty or tqqq_wk.empty or usd_wk.empty: return None
+        if qqq_wk.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty: return None
 
         # MultiIndex 정리
-        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, usd_wk, usd_mo, exch, vix, tnx, irx]:
+        for d in [qqq_dy, qqq_wk, qqq_mo, tqqq_wk, tqqq_mo, usd_wk, usd_mo, soxx_dy, soxx_wk, soxx_mo, exch, vix, tnx, irx]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
@@ -145,8 +150,8 @@ def get_market_data():
         # QQQ 지표 & 이동평균선
         qqq_price = float(qqq_wk['Close'].iloc[-1])
         
-        # MA 계산 (일/주/월)
-        for d in [qqq_dy, qqq_wk, qqq_mo]:
+        # MA 계산 (일/주/월) - QQQ & SOXX & TQQQ & USD 일괄 처리
+        for d in [qqq_dy, qqq_wk, qqq_mo, soxx_dy, soxx_wk, soxx_mo, tqqq_wk, tqqq_mo, usd_wk, usd_mo]:
             d['MA20'] = d['Close'].rolling(window=20).mean()
             d['MA40'] = d['Close'].rolling(window=40).mean() # 40주선 추가 (Winter Protocol)
             d['MA60'] = d['Close'].rolling(window=60).mean()
@@ -193,25 +198,71 @@ def get_market_data():
             if was_inverted and is_positive_now:
                 is_spread_normalization = True
 
-        # [Ver 22.4] Winter Protocol Trigger (QQQ 일봉 200선 이탈)
-        # 조건: QQQ 주가가 일봉 200선(200-Day MA) 아래로 내려감
+        # [Ver 22.5] Winter Protocol & Spring Re-entry (Dual Check)
         is_winter_mode = False
-        is_spring_reentry = False # [Priority 2.5] 봄의 귀환 체크
+        is_spring_reentry = False
         
+        # 1. 현재 상태 체크 (QQQ & SOXX)
         qqq_ma200_dy = float(qqq_dy['MA200'].iloc[-1])
-        qqq_price_dy = float(qqq_dy['Close'].iloc[-1]) # 일봉 종가 기준
+        qqq_price_dy = float(qqq_dy['Close'].iloc[-1])
         
-        if not pd.isna(qqq_ma200_dy):
-             is_winter_mode = qqq_price_dy < qqq_ma200_dy
+        soxx_ma200_dy = float(soxx_dy['MA200'].iloc[-1])
+        soxx_price_dy = float(soxx_dy['Close'].iloc[-1])
+        
+        # 하나라도 200일선 아래면 겨울
+        if (not pd.isna(qqq_ma200_dy) and qqq_price_dy < qqq_ma200_dy) or \
+           (not pd.isna(soxx_ma200_dy) and soxx_price_dy < soxx_ma200_dy):
+            is_winter_mode = True
+        
+        # 2. Re-entry 감지 (어제는 겨울 -> 오늘은 봄 + 필터 충족)
+        # 단, app.py는 실시간이므로 '현재'가 봄이어야 Re-entry 후보가 됨
+        if not is_winter_mode and len(qqq_dy) >= 4:
+             # 어제 상태 확인 (어제 종가 기준 하나라도 아래였어야 함)
+             yesterday_qqq = float(qqq_dy['Close'].iloc[-2])
+             yesterday_qqq_ma = float(qqq_dy['MA200'].iloc[-2])
+             yesterday_soxx = float(soxx_dy['Close'].iloc[-2])
+             yesterday_soxx_ma = float(soxx_dy['MA200'].iloc[-2])
              
-             # 어제 상태 체크 (Re-entry 감지)
-             if len(qqq_dy) >= 2:
-                 yesterday_price = float(qqq_dy['Close'].iloc[-2])
-                 yesterday_ma200 = float(qqq_dy['MA200'].iloc[-2])
-                 
-                 # 어제는 겨울이었는데(아래), 오늘은 봄(위)이 된 경우
-                 if yesterday_price < yesterday_ma200 and not is_winter_mode:
-                     is_spring_reentry = True
+             was_winter_yesterday = (yesterday_qqq < yesterday_qqq_ma) or (yesterday_soxx < yesterday_soxx_ma)
+             
+             # 만약 어제도 겨울이었고, 오늘 비로소 둘 다 위로 올라왔다면 -> Re-entry Check 시작
+             # 하지만 'Re-entry'는 봄 초입 기간(약 1달)을 의미하므로, 
+             # 여기서는 "완전히 안전한 봄인가?"를 판단하는 필터를 적용.
+             
+             # Filter: 3일 연속 유지 OR 3% 이상 상승 (QQQ 기준 or 둘다? -> QQQ 기준 적용)
+             # QQQ가 시장 대표성이 크므로 QQQ 필터를 메인으로 함. (SOXX는 트리거 역할)
+             
+             # Filter 1: 3일 연속 200일선 위 (Time Filter)
+             q_d0 = qqq_dy.iloc[-1]; q_d1 = qqq_dy.iloc[-2]; q_d2 = qqq_dy.iloc[-3]
+             is_3days_safe = (q_d0['Close'] > q_d0['MA200']) and \
+                             (q_d1['Close'] > q_d1['MA200']) and \
+                             (q_d2['Close'] > q_d2['MA200'])
+                             
+             # Filter 2: 3% 이상 상승 (Price Filter)
+             is_3pct_safe = qqq_price_dy >= (qqq_ma200_dy * 1.03)
+             
+             # 필터 통과 여부
+             is_confirmed_spring = is_3days_safe or is_3pct_safe
+             
+             # Re-entry 모드 표시 조건:
+             # 1. 기본 봄 조건 충족 (둘 다 > 200MA) -> 이미 is_winter_mode = False 상태
+             # 2. 필터는 아직 통과 못했거나(불안), 갓 통과해서 진입해야 하는 시점.
+             
+             # 로직 단순화:
+             # 겨울이 아니다 = 일단 봄.
+             # 근데 필터를 통과 못했으면 -> "불안한 봄 (Wait)" or "Re-entry 대기"
+             # 필터를 통과 했으면 -> "Re-entry 진입" (초기) or "완연한 봄"
+             
+             # 여기서는 '봄의 귀환' 메시지를 띄우기 위해, 
+             # "어제는 겨울이었는데 오늘은 봄(필터 미확정 포함)" 이면 Re-entry 모드로 간주하고
+             # 메인 로직에서 세부 가이드를 줌.
+             
+             if was_winter_yesterday:
+                 is_spring_reentry = True
+             
+             # 추가: 만약 최근 20일 내에 골든크로스가 발생했다면 계속 Re-entry 모드로 볼 수도 있음.
+             # 하지만 복잡도를 줄이기 위해, app.py에서는 '어제 vs 오늘' 변화만 감지하거나
+             # 혹은 '필터 통과 여부' 정보를 리턴해서 메인에서 처리.
 
         # [Ver 20.2] CNN 공포탐욕지수 (Fear & Greed Index)
         fear_greed_value = 50  # 기본값 (중립)
@@ -287,6 +338,13 @@ def get_market_data():
             'is_winter_mode': is_winter_mode,
             'is_spring_reentry': is_spring_reentry,
             'qqq_ma200_dy': qqq_ma200_dy,
+            'soxx_dy': soxx_dy,
+            'soxx_wk': soxx_wk,
+            'soxx_mo': soxx_mo,
+            'tqqq_wk': tqqq_wk,
+            'tqqq_mo': tqqq_mo,
+            'usd_wk': usd_wk,
+            'usd_mo': usd_mo,
             'fear_greed_value': fear_greed_value,
             'fear_greed_text': fear_greed_text,
             'buffett_indicator': buffett_indicator,
@@ -309,7 +367,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 22.3 (Hybrid Sniper Strategy)** | System Owner: **Busan Programmer** | Benchmark: **QQQ (All Indicators)**")
+st.markdown("**Ver 22.5 (Semiconductor Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ & SOXX**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -434,23 +492,27 @@ if mkt is not None:
     # --- 1. 시장 상황판 (먼저 표시하여 변수 정의) ---
     st.header("1. 시장 상황판 (Market Status)")
     
-    # [Ver 22.4] Winter Protocol Monitor
+    # [Ver 22.5] Winter Protocol Monitor
     with st.expander("🚨 계절 모니터링 (Season Check)", expanded=True):
         c1, c2 = st.columns([3, 1])
         with c1:
-            # 200일선 상태
-            ma200_val = mkt['qqq_ma200_dy']
+            # 200일선 상태 (QQQ & SOXX)
+            q_ma = mkt['qqq_dy']['MA200'].iloc[-1]
+            q_pr = mkt['qqq_dy']['Close'].iloc[-1]
+            q_st = "🟢 봄" if q_pr >= q_ma else "❄️ 겨울"
+            
+            s_ma = mkt['soxx_dy']['MA200'].iloc[-1]
+            s_pr = mkt['soxx_dy']['Close'].iloc[-1]
+            s_st = "🟢 봄" if s_pr >= s_ma else "❄️ 겨울"
+
             trend_status = "🟢 봄 (Spring)"
             if mkt['is_winter_mode']: trend_status = "🔴 겨울 (Winter)"
             
-            # 일봉 기준 가격 표시
-            qqq_price_daily = mkt['qqq_dy']['Close'].iloc[-1]
-            
             st.markdown(f"""
             **시스템 계절 판단:**
-            *   **상태:** **[{trend_status}]**
-            *   **기준:** QQQ 일봉 ${qqq_price_daily:.2f} vs **200일선 ${ma200_val:.2f}**
-            *   **규칙:** 200일선 위면 '봄', 아래면 '겨울'
+            *   **종합 상태:** **[{trend_status}]** (둘 중 하나라도 겨울이면 겨울)
+            *   **QQQ:** {q_st} (${q_pr:.2f} vs 200선 ${q_ma:.2f})
+            *   **SOXX:** {s_st} (${s_pr:.2f} vs 200선 ${s_ma:.2f})
             """)
         with c2:
             season_manual = st.checkbox("❄️ 겨울 강제 선포", value=False, help="시스템 판단 외에 CRO 판단으로 겨울 모드를 강제할 때 체크")
@@ -460,12 +522,12 @@ if mkt is not None:
     base_target_stock = PHASE_CONFIG[current_phase]['target_stock']
     base_target_cash = PHASE_CONFIG[current_phase]['target_cash']
     
-    # [Ver 22.3] 겨울 모드 발동 로직
+    # [Ver 22.5] 겨울 모드 발동 로직
     is_winter = mkt['is_winter_mode'] or season_manual
     
     if is_winter: 
         if not season_manual:
-            st.toast(f"❄️ 겨울이 왔습니다! (QQQ < 200일선) 방어 태세 전환.", icon="🥶")
+            st.toast(f"❄️ 겨울이 왔습니다! (200일선 붕괴) 방어 태세 전환.", icon="🥶")
         target_stock_ratio = 0.5 
         target_cash_ratio = 0.5 
         rsi_sell_threshold = 75 
@@ -479,8 +541,24 @@ if mkt is not None:
         
         # [Priority 2.5] 봄의 귀환 체크
         if mkt['is_spring_reentry']:
-            st.toast("🌱 봄이 돌아왔습니다! (Re-entry) 분할 매수 모드 가동.", icon="🌱")
-            mode_label = "🌱 봄의 귀환 (Spring Re-entry)"
+            # Re-entry 필터 통과 여부 확인 (3일 유지 or 3% 상승)
+            q_d = mkt['qqq_dy']
+            q_ma = q_d['MA200'].iloc[-1]
+            q_pr = q_d['Close'].iloc[-1]
+            
+            # 필터 1: 3일 연속
+            d0=q_d.iloc[-1]; d1=q_d.iloc[-2]; d2=q_d.iloc[-3]
+            is_3days = (d0['Close']>d0['MA200']) and (d1['Close']>d1['MA200']) and (d2['Close']>d2['MA200'])
+            
+            # 필터 2: 3% 상승
+            is_3pct = q_pr >= (q_ma * 1.03)
+            
+            if is_3days or is_3pct:
+                st.toast("🌱 봄의 귀환! 필터 통과 (Re-entry Confirmed).", icon="✅")
+                mode_label = "🌱 봄의 귀환 (Re-entry Confirmed)"
+            else:
+                st.toast("⚠️ 봄의 귀환 감지 (검증 대기중...)", icon="⏳")
+                mode_label = "⏳ 봄의 귀환 (검증 대기: 3일 or +3%)"
     
     current_stock_ratio = total_stock_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
@@ -698,14 +776,26 @@ if mkt is not None:
             input_cash_total = (total_assets * target_stock_ratio) - total_stock_krw
             input_cash_weekly = input_cash_total / 4
             
-            final_action = "🌱 SPRING RE-ENTRY (봄의 귀환)"
+            # 필터 상태 확인
+            q_d = mkt['qqq_dy']
+            q_ma = q_d['MA200'].iloc[-1]
+            q_pr = q_d['Close'].iloc[-1]
+            is_3days = (q_d.iloc[-1]['Close']>q_d.iloc[-1]['MA200']) and (q_d.iloc[-2]['Close']>q_d.iloc[-2]['MA200']) and (q_d.iloc[-3]['Close']>q_d.iloc[-3]['MA200'])
+            is_3pct = q_pr >= (q_ma * 1.03)
             
-            if qqq_rsi > 75:
-                detail_msg = f"겨울 종료 확인. 4주 분할 진입 시점이나, RSI({qqq_rsi:.1f}) 과열로 금주는 Skip합니다. (다음 주 이월)"
+            if not (is_3days or is_3pct):
+                final_action = "⏳ RE-ENTRY WAIT (검증 대기)"
+                detail_msg = f"겨울 종료 감지됨. 하지만 휩소 방지를 위해 필터 대기 중입니다.\n\n👉 **대기 조건:** (1) 3일 유지 OR (2) 3% 상승\n현재는 관망하십시오."
                 action_color = "orange"
             else:
-                detail_msg = f"겨울 종료 확인. 현금 4주 분할 투입을 시작합니다.\n\n👉 **금주 투입액 (1/4):** {format_krw(input_cash_weekly)} 매수\n⚠️ 200일선 다시 깨지면 즉시 중단 및 현금 50% 확보 (Abort Mission)."
-                action_color = "green"
+                final_action = "🌱 SPRING RE-ENTRY (봄의 귀환)"
+                
+                if qqq_rsi > 75:
+                    detail_msg = f"필터 통과(진짜 봄). 4주 분할 진입 시점이나, RSI({qqq_rsi:.1f}) 과열로 금주는 Skip합니다. (다음 주 이월)"
+                    action_color = "orange"
+                else:
+                    detail_msg = f"필터 통과(진짜 봄). 현금 4주 분할 투입을 시작합니다.\n\n👉 **금주 투입액 (1/4):** {format_krw(input_cash_weekly)} 매수\n⚠️ 200일선 다시 깨지면 즉시 중단 및 현금 50% 확보 (Abort Mission)."
+                    action_color = "green"
 
         elif qqq_rsi >= 80:
             target_cash_panic = target_cash_ratio + 0.1
@@ -772,38 +862,74 @@ if mkt is not None:
     if monthly_color == "red": st.error(monthly_msg)
     else: st.info(monthly_msg)
 
-    # --- 4. 차트 ---
+    # --- 4. 차트 (종목별 독립 Expander) ---
     st.markdown("---")
-    with st.expander("📊 차트 확인 (Daily / Weekly / Monthly)", expanded=True):
-        tab1, tab2, tab3 = st.tabs(["일봉 (Daily)", "주봉 (Weekly)", "월봉 (Monthly)"])
+    st.header("4. 📊 차트 분석 (Technical Charts)")
+    
+    # 차트 그리기 함수 (공통)
+    def draw_chart(df, title):
+        if df is None or df.empty:
+            st.warning(f"데이터가 없습니다 ({title})")
+            return
+
+        fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Candle')])
         
-        def draw_chart(df, title):
-            fig = go.Figure(data=[go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Candle')])
-            
-            fig.add_trace(go.Scatter(x=df.index, y=df['MA20'], line=dict(color='orange', width=1), name='MA 20'))
-            if 'MA40' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['MA40'], line=dict(color='purple', width=2), name='MA 40 (Winter Line)'))
-            fig.add_trace(go.Scatter(x=df.index, y=df['MA60'], line=dict(color='blue', width=1), name='MA 60'))
-            if 'MA200' in df.columns:
-                 fig.add_trace(go.Scatter(x=df.index, y=df['MA200'], line=dict(color='red', width=1, dash='dot'), name='MA 200 (Long Trend)'))
-            
-            fig.update_layout(title=title, height=400, margin=dict(l=20, r=20, t=40, b=20), xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
-            
+        # MA Line Colors (40일선, 200일선 포함)
+        ma_colors = {'MA20': 'orange', 'MA40': 'purple', 'MA60': 'blue', 'MA200': 'red'}
+        
+        for ma_name, color in ma_colors.items():
+            if ma_name in df.columns:
+                width = 2 if ma_name == 'MA40' else 1
+                dash = 'dot' if ma_name == 'MA200' else 'solid'
+                fig.add_trace(go.Scatter(x=df.index, y=df[ma_name], line=dict(color=color, width=width, dash=dash), name=ma_name))
+        
+        fig.update_layout(title=title, height=400, margin=dict(l=20, r=20, t=40, b=20), xaxis_rangeslider_visible=False)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        if 'RSI' in df.columns:
             fig_rsi = go.Figure(data=[go.Scatter(x=df.index, y=df['RSI'], line=dict(color='purple'))])
             fig_rsi.add_hline(y=80, line_color="red", line_dash="dash")
             fig_rsi.add_hline(y=60, line_color="green", line_dash="dash")
             fig_rsi.update_layout(title=f'{title} - RSI', height=200, yaxis_range=[0, 100], margin=dict(l=20, r=20, t=40, b=20))
             st.plotly_chart(fig_rsi, use_container_width=True)
 
+    # 📊 QQQ 차트
+    with st.expander("📊 QQQ (나스닥 100) 차트 확인", expanded=False):
+        tab1, tab2, tab3 = st.tabs(["일봉 (Daily)", "주봉 (Weekly)", "월봉 (Monthly)"])
         with tab1:
-            draw_chart(df_dy, "QQQ Daily Chart")
-        
+            draw_chart(mkt['qqq_dy'], "QQQ Daily Chart")
         with tab2:
-            draw_chart(df_wk, "QQQ Weekly Chart")
-            
+            draw_chart(mkt['qqq_wk'], "QQQ Weekly Chart")
         with tab3:
-            draw_chart(df_mo, "QQQ Monthly Chart")
+            draw_chart(mkt['qqq_mo'], "QQQ Monthly Chart")
+    
+    # 📊 SOXX 차트
+    with st.expander("📊 SOXX (반도체 지수) 차트 확인", expanded=False):
+        tab1, tab2, tab3 = st.tabs(["일봉 (Daily)", "주봉 (Weekly)", "월봉 (Monthly)"])
+        with tab1:
+            draw_chart(mkt['soxx_dy'], "SOXX Daily Chart")
+        with tab2:
+            draw_chart(mkt['soxx_wk'], "SOXX Weekly Chart")
+        with tab3:
+            draw_chart(mkt['soxx_mo'], "SOXX Monthly Chart")
+    
+    # 📊 TQQQ 차트
+    with st.expander("📊 TQQQ (3배 레버리지) 차트 확인", expanded=False):
+        tab1, tab2 = st.tabs(["주봉 (Weekly)", "월봉 (Monthly)"])
+        with tab1:
+            draw_chart(mkt['tqqq_wk'], "TQQQ Weekly Chart")
+        with tab2:
+            draw_chart(mkt['tqqq_mo'], "TQQQ Monthly Chart")
+        st.caption("ℹ️ TQQQ 일봉 데이터는 성능 최적화를 위해 제공하지 않습니다.")
+    
+    # 📊 USD 차트
+    with st.expander("📊 USD (반도체 2배) 차트 확인", expanded=False):
+        tab1, tab2 = st.tabs(["주봉 (Weekly)", "월봉 (Monthly)"])
+        with tab1:
+            draw_chart(mkt['usd_wk'], "USD Weekly Chart")
+        with tab2:
+            draw_chart(mkt['usd_mo'], "USD Monthly Chart")
+        st.caption("ℹ️ USD 일봉 데이터는 성능 최적화를 위해 제공하지 않습니다.")
 
     # --- 5. 릴리즈 노트 & 코어 로직 ---
     st.markdown("---")
