@@ -67,7 +67,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V22.3", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V22.4", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -79,12 +79,13 @@ PHASE_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 22.3 Hybrid Sniper
+### 📜 Master Protocol (요약) - Ver 22.4 Daily Defense
 1.  **[헌법] 손실 중 매도 금지:** 계좌가 마이너스면 RSI가 100이어도 절대 팔지 않는다.
-2.  **[겨울] 40주선 붕괴:** QQQ가 주봉 40선 아래로 내려가면 '겨울' 선포. (현금 비중 50% 미만일 때만 확보)
-3.  **[스나이퍼] 역피라미드:** 하락할수록 더 많이 산다 (10% -> 20% -> 30% -> 40%).
-4.  **[광기] RSI 80:** (봄 시즌 중) 현금 비중을 Target + 10%까지 늘린다.
-5.  **[듀얼] 50:50:** TQQQ와 USD 비중이 10%p 이상 벌어지면 리밸런싱.
+2.  **[겨울] 200일선 붕괴:** QQQ가 일봉 200선 아래로 내려가면 '겨울' 선포. (현금 비중 50% 미만일 때만 확보)
+3.  **[봄의 귀환] 4주 분할 매수:** 겨울 → 봄 전환 시, 1개월간 분할 매수로 신중하게 진입한다.
+4.  **[스나이퍼] 역피라미드:** 하락할수록 더 많이 산다 (10% -> 20% -> 30% -> 40%).
+5.  **[광기] RSI 80:** (봄 시즌 중) 현금 비중을 Target + 10%까지 늘린다.
+6.  **[듀얼] 50:50:** TQQQ와 USD 비중이 10%p 이상 벌어지면 리밸런싱.
 """
 
 # ==========================================
@@ -149,7 +150,7 @@ def get_market_data():
             d['MA20'] = d['Close'].rolling(window=20).mean()
             d['MA40'] = d['Close'].rolling(window=40).mean() # 40주선 추가 (Winter Protocol)
             d['MA60'] = d['Close'].rolling(window=60).mean()
-            d['MA200'] = d['Close'].rolling(window=200).mean() # 200일선 추가 (장기 추세)
+            d['MA200'] = d['Close'].rolling(window=200).mean() # 200일선 추가
             calculate_indicators(d) # RSI, MDD 계산
 
         qqq_rsi_wk = float(qqq_wk['RSI'].iloc[-1])
@@ -192,12 +193,25 @@ def get_market_data():
             if was_inverted and is_positive_now:
                 is_spread_normalization = True
 
-        # [Ver 22.3] Winter Protocol Trigger (QQQ 주봉 40선 이탈)
-        # 조건: QQQ 주가가 주봉 40선(40-week MA) 아래로 내려감
+        # [Ver 22.4] Winter Protocol Trigger (QQQ 일봉 200선 이탈)
+        # 조건: QQQ 주가가 일봉 200선(200-Day MA) 아래로 내려감
         is_winter_mode = False
-        qqq_ma40_wk = float(qqq_wk['MA40'].iloc[-1])
-        if not pd.isna(qqq_ma40_wk):
-             is_winter_mode = qqq_price < qqq_ma40_wk
+        is_spring_reentry = False # [Priority 2.5] 봄의 귀환 체크
+        
+        qqq_ma200_dy = float(qqq_dy['MA200'].iloc[-1])
+        qqq_price_dy = float(qqq_dy['Close'].iloc[-1]) # 일봉 종가 기준
+        
+        if not pd.isna(qqq_ma200_dy):
+             is_winter_mode = qqq_price_dy < qqq_ma200_dy
+             
+             # 어제 상태 체크 (Re-entry 감지)
+             if len(qqq_dy) >= 2:
+                 yesterday_price = float(qqq_dy['Close'].iloc[-2])
+                 yesterday_ma200 = float(qqq_dy['MA200'].iloc[-2])
+                 
+                 # 어제는 겨울이었는데(아래), 오늘은 봄(위)이 된 경우
+                 if yesterday_price < yesterday_ma200 and not is_winter_mode:
+                     is_spring_reentry = True
 
         # [Ver 20.2] CNN 공포탐욕지수 (Fear & Greed Index)
         fear_greed_value = 50  # 기본값 (중립)
@@ -271,7 +285,8 @@ def get_market_data():
             'is_vix_trend': is_vix_trend,
             'is_spread_normalization': is_spread_normalization,
             'is_winter_mode': is_winter_mode,
-            'qqq_ma40_wk': qqq_ma40_wk,
+            'is_spring_reentry': is_spring_reentry,
+            'qqq_ma200_dy': qqq_ma200_dy,
             'fear_greed_value': fear_greed_value,
             'fear_greed_text': fear_greed_text,
             'buffett_indicator': buffett_indicator,
@@ -419,20 +434,23 @@ if mkt is not None:
     # --- 1. 시장 상황판 (먼저 표시하여 변수 정의) ---
     st.header("1. 시장 상황판 (Market Status)")
     
-    # [Ver 22.3] Winter Protocol Monitor
+    # [Ver 22.4] Winter Protocol Monitor
     with st.expander("🚨 계절 모니터링 (Season Check)", expanded=True):
         c1, c2 = st.columns([3, 1])
         with c1:
-            # 40주선 상태
-            ma40_val = mkt['qqq_ma40_wk']
+            # 200일선 상태
+            ma200_val = mkt['qqq_ma200_dy']
             trend_status = "🟢 봄 (Spring)"
             if mkt['is_winter_mode']: trend_status = "🔴 겨울 (Winter)"
+            
+            # 일봉 기준 가격 표시
+            qqq_price_daily = mkt['qqq_dy']['Close'].iloc[-1]
             
             st.markdown(f"""
             **시스템 계절 판단:**
             *   **상태:** **[{trend_status}]**
-            *   **기준:** QQQ 주가 ${qqq_price:.2f} vs **40주선 ${ma40_val:.2f}**
-            *   **규칙:** 40주선 위면 '봄', 아래면 '겨울'
+            *   **기준:** QQQ 일봉 ${qqq_price_daily:.2f} vs **200일선 ${ma200_val:.2f}**
+            *   **규칙:** 200일선 위면 '봄', 아래면 '겨울'
             """)
         with c2:
             season_manual = st.checkbox("❄️ 겨울 강제 선포", value=False, help="시스템 판단 외에 CRO 판단으로 겨울 모드를 강제할 때 체크")
@@ -447,11 +465,7 @@ if mkt is not None:
     
     if is_winter: 
         if not season_manual:
-            st.toast(f"❄️ 겨울이 왔습니다! (QQQ < 40주선) 방어 태세 전환.", icon="🥶")
-        
-        # 겨울 모드 설정
-        # 1. 주식 목표 비중은 현금 확보 로직에서 처리하지만, 가이드상으로는 50% 현금 확보
-        # 2. RSI 매도 기준 강화는 겨울엔 의미 없음 (어차피 매수 안함), 다만 탈출용으로 놔둠
+            st.toast(f"❄️ 겨울이 왔습니다! (QQQ < 200일선) 방어 태세 전환.", icon="🥶")
         target_stock_ratio = 0.5 
         target_cash_ratio = 0.5 
         rsi_sell_threshold = 75 
@@ -462,6 +476,11 @@ if mkt is not None:
         target_cash_ratio = base_target_cash
         rsi_sell_threshold = 80
         mode_label = "🌸 봄 모드 (Spring Protocol)"
+        
+        # [Priority 2.5] 봄의 귀환 체크
+        if mkt['is_spring_reentry']:
+            st.toast("🌱 봄이 돌아왔습니다! (Re-entry) 분할 매수 모드 가동.", icon="🌱")
+            mode_label = "🌱 봄의 귀환 (Spring Re-entry)"
     
     current_stock_ratio = total_stock_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
@@ -672,7 +691,23 @@ if mkt is not None:
 
     else:
         # 봄 (Spring) 행동 강령
-        if qqq_rsi >= 80:
+        
+        # [Priority 2.5] 봄의 귀환 (Spring Re-entry)
+        # 이번 주가 봄으로 바뀐 '첫 주'라면 분할 매수 가이드 출력
+        if mkt['is_spring_reentry']:
+            input_cash_total = (total_assets * target_stock_ratio) - total_stock_krw
+            input_cash_weekly = input_cash_total / 4
+            
+            final_action = "🌱 SPRING RE-ENTRY (봄의 귀환)"
+            
+            if qqq_rsi > 75:
+                detail_msg = f"겨울 종료 확인. 4주 분할 진입 시점이나, RSI({qqq_rsi:.1f}) 과열로 금주는 Skip합니다. (다음 주 이월)"
+                action_color = "orange"
+            else:
+                detail_msg = f"겨울 종료 확인. 현금 4주 분할 투입을 시작합니다.\n\n👉 **금주 투입액 (1/4):** {format_krw(input_cash_weekly)} 매수\n⚠️ 200일선 다시 깨지면 즉시 중단 및 현금 50% 확보 (Abort Mission)."
+                action_color = "green"
+
+        elif qqq_rsi >= 80:
             target_cash_panic = target_cash_ratio + 0.1
             sell_needed = (total_assets * target_cash_panic) - total_cash_krw
             if sell_needed > 0:

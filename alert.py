@@ -30,12 +30,13 @@ def calculate_rsi(series, window=14):
     return 100 - (100 / (1 + rs))
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V22.3 Hybrid Sniper)")
+    print("🔍 시장 데이터 분석 중... (V22.4 Daily Defense)")
     
     try:
         # 데이터 수집 (QQQ, TQQQ, VIX, TNX, IRX)
-        qqq = yf.download("QQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
-        tqqq = yf.download("TQQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
+        # 일봉 200선을 위해 1년 이상 데이터 필요
+        qqq = yf.download("QQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
+        tqqq = yf.download("TQQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
         vix = yf.download("^VIX", period="1y", progress=False, auto_adjust=False)
         tnx = yf.download("^TNX", period="1y", progress=False, auto_adjust=False) # 10년물
         irx = yf.download("^IRX", period="1y", progress=False, auto_adjust=False) # 3개월물
@@ -52,22 +53,23 @@ def check_market_status():
         qqq['RSI'] = calculate_rsi(qqq['Close'])
         current_rsi = float(qqq['RSI'].iloc[-1])
         
-        qqq['Roll_Max'] = qqq['Close'].rolling(window=52, min_periods=1).max()
+        # MDD (1년 기준)
+        qqq['Roll_Max'] = qqq['Close'].rolling(window=252, min_periods=1).max()
         qqq['DD'] = (qqq['Close'] / qqq['Roll_Max']) - 1.0
         current_mdd = float(qqq['DD'].iloc[-1])
         mdd_pct = current_mdd * 100
         
-        # [Ver 22.3] Winter Protocol: 40주선 계산
-        qqq['MA40'] = qqq['Close'].rolling(window=40).mean()
+        # [Ver 22.4] Winter Protocol: 일봉 200선 (MA200)
+        qqq['MA200'] = qqq['Close'].rolling(window=200).mean()
         current_price = float(qqq['Close'].iloc[-1])
-        current_ma40 = float(qqq['MA40'].iloc[-1])
+        current_ma200 = float(qqq['MA200'].iloc[-1])
         
         is_winter = False
-        if not pd.isna(current_ma40):
-            is_winter = current_price < current_ma40
+        if not pd.isna(current_ma200):
+            is_winter = current_price < current_ma200
 
         # TQQQ 지표
-        tqqq['Roll_Max'] = tqqq['Close'].rolling(window=52, min_periods=1).max()
+        tqqq['Roll_Max'] = tqqq['Close'].rolling(window=252, min_periods=1).max()
         tqqq['DD'] = (tqqq['Close'] / tqqq['Roll_Max']) - 1.0
         tqqq_mdd = float(tqqq['DD'].iloc[-1]) if not tqqq.empty else 0
         tqqq_mdd_pct = tqqq_mdd * 100
@@ -78,23 +80,20 @@ def check_market_status():
         current_irx = float(irx['Close'].iloc[-1]) if not irx.empty else 0
         current_spread = current_tnx - current_irx
 
-        # 2. 알림 메시지 구성 (Logic V22.3)
+        # 2. 알림 메시지 구성 (Logic V22.4)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V22.3] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V22.4] 긴급 브리핑** 🔥\n\n"
         
         # (0) 계절 변화 감지 (최우선 순위)
         season_status = "🔴 겨울 (Winter)" if is_winter else "🟢 봄 (Spring)"
         if is_winter:
-            # 겨울 진입 알림은 중요하므로 강조
-            # 단, 매번 보내면 시끄러우니까 '겨울 진입 직후'를 판단하면 좋겠지만
-            # 여기서는 상태가 겨울이면 항상 상단에 표시
              msg += f"❄️ **[겨울 모드 작동 중]**\n"
-             msg += f"- QQQ ${current_price:.2f} < 40주선 ${current_ma40:.2f}\n"
+             msg += f"- QQQ ${current_price:.2f} < 200일선 ${current_ma200:.2f}\n"
              msg += "👉 **ACTION:** 현금 50% 확보 (부족 시 매도). 월급 전액 현금 적립.\n\n"
-             # 겨울 진입 초기(40주선 근처)라면 알림 트리거
-             if abs(current_price - current_ma40) / current_price < 0.01: # 1% 내외 근접 시
+             # 겨울 진입 초기(200일선 근처)라면 알림 트리거
+             if abs(current_price - current_ma200) / current_price < 0.01: # 1% 내외 근접 시
                  alert_triggered = True
-
+        
         # (1) RSI 감시 (광기/과열) - 봄에만 유효
         if not is_winter:
             rsi_threshold = 80
@@ -111,7 +110,7 @@ def check_market_status():
         if current_mdd <= sniper_threshold:
             msg += f"📉 **[스나이퍼 기회] MDD {mdd_pct:.1f}%**\n"
             
-            # 역피라미드 비중 (Ver 22.3)
+            # 역피라미드 비중 (Ver 22.4)
             if current_mdd <= -0.45:
                 msg += "💣 **Last Bullet (시스템 붕괴)**\n👉 **ACTION:** 현금 40% (All-In) 투입!\n"
             elif current_mdd <= -0.35:
