@@ -1,5 +1,16 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 22.6 (RSI Alignment & Local Test Utilities)
+- **📈 RSI 계산 방식 정합화 (Wilder/RMA)**:
+    - `alert.py` / `app.py`의 RSI 계산을 **Wilder(RMA)** 방식으로 통일하여 증권앱(토스/영웅문)과 괴리 축소.
+    - 주봉 RSI는 **일봉 → 주간(W-FRI) 리샘플링** 기반으로 계산하여 **진행 중인 이번 주**까지 반영되도록 개선.
+- **📊 지표 표시 개선 (QQQ & SOXX Dual)**:
+    - `alert.py`: QQQ/SOXX **주봉 RSI 표기** 강화 및 **MDD를 QQQ/SOXX 각각 분리 표기**.
+    - `app.py`: 시장 상황판에 **SOXX 지표 라인(현재가/월봉 RSI/주봉 RSI/MDD)** 추가 (QQQ 아래, TQQQ 위).
+- **🧪 로컬 텔레그램 알림 테스트 도구 추가**:
+    - `test_alert.bat` 추가: 깃허브 액션 없이 로컬에서 `alert.py` 텔레그램 전송 테스트 가능.
+    - 윈도우 콘솔 인코딩/배치 주석 파싱 이슈 완화.
+
 ### Ver 22.5 (Semiconductor Watch & Re-entry)
 - **❄️ 겨울 판단 기준 강화 (Semiconductor First)**:
     - 반도체는 경기 선행 지표입니다. QQQ가 버티더라도 **[SOXX(반도체 지수)]가 먼저 200일선을 깨면** 즉시 겨울을 선포합니다.

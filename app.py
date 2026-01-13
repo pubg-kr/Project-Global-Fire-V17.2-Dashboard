@@ -67,7 +67,7 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V22.4", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V22.6", layout="wide", page_icon="🔥")
 
 PHASE_CONFIG = {
     0: {"limit": 100000000, "target_stock": 0.9, "target_cash": 0.1, "name": "Phase 0 (Seed)"},
@@ -95,12 +95,13 @@ def calculate_indicators(df):
     """데이터프레임(주/월봉)을 받아 RSI와 MDD를 계산하여 반환"""
     if df.empty: return 0, 0
     
-    # RSI 계산
+    # RSI 계산 (Wilder / RMA)
+    # - 토스/영웅문 등 대부분의 플랫폼 RSI는 Wilder smoothing(RMA)에 가깝습니다.
     delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).fillna(0)
-    loss = (-delta.where(delta < 0, 0)).fillna(0)
-    avg_gain = gain.rolling(window=14).mean()
-    avg_loss = loss.rolling(window=14).mean()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+    avg_gain = gain.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
+    avg_loss = loss.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
@@ -158,9 +159,36 @@ def get_market_data():
             d['MA200'] = d['Close'].rolling(window=200).mean() # 200일선 추가
             calculate_indicators(d) # RSI, MDD 계산
 
-        qqq_rsi_wk = float(qqq_wk['RSI'].iloc[-1])
+        # QQQ 주봉 RSI는 토스/영웅문과 최대한 맞추기 위해,
+        # 일봉을 주간(W-FRI)으로 리샘플링해서 "진행 중인 이번 주"까지 포함한 RSI로 계산
+        qqq_wk_for_rsi = qqq_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum',
+        }).dropna()
+        calculate_indicators(qqq_wk_for_rsi)
+        qqq_rsi_wk = float(qqq_wk_for_rsi['RSI'].iloc[-1])
         qqq_mdd = float(qqq_wk['DD'].iloc[-1])
         qqq_rsi_mo = float(qqq_mo['RSI'].iloc[-1])
+
+        # SOXX 지표 (현재가/RSI/MDD)
+        soxx_price = float(soxx_wk['Close'].iloc[-1])
+        soxx_mdd = float(soxx_wk['DD'].iloc[-1])
+        soxx_rsi_mo = float(soxx_mo['RSI'].iloc[-1])
+
+        # SOXX 주봉 RSI는 토스/영웅문과 최대한 맞추기 위해,
+        # 일봉을 주간(W-FRI)으로 리샘플링해서 "진행 중인 이번 주"까지 포함한 RSI로 계산
+        soxx_wk_for_rsi = soxx_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum',
+        }).dropna()
+        calculate_indicators(soxx_wk_for_rsi)
+        soxx_rsi_wk = float(soxx_wk_for_rsi['RSI'].iloc[-1])
         
         # TQQQ 지표
         tqqq_price = float(tqqq_wk['Close'].iloc[-1])
@@ -321,6 +349,10 @@ def get_market_data():
             'qqq_rsi_wk': qqq_rsi_wk,
             'qqq_rsi_mo': qqq_rsi_mo,
             'qqq_mdd': qqq_mdd,
+            'soxx_price': soxx_price,
+            'soxx_rsi_wk': soxx_rsi_wk,
+            'soxx_rsi_mo': soxx_rsi_mo,
+            'soxx_mdd': soxx_mdd,
             'tqqq_price': tqqq_price,
             'tqqq_rsi_wk': tqqq_rsi_wk,
             'tqqq_rsi_mo': tqqq_rsi_mo,
@@ -367,7 +399,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 22.5 (Semiconductor Watch)** | System Owner: **Busan Programmer** | Benchmark: **QQQ & SOXX**")
+st.markdown("**Ver 22.6 (RSI Alignment)** | System Owner: **Busan Programmer** | Benchmark: **QQQ & SOXX**")
 
 # 데이터 로드 (초기화)
 saved_data = load_data()
@@ -396,6 +428,10 @@ if mkt is not None:
     usd_krw_rate = mkt['usd_krw']
     qqq_rsi = mkt['qqq_rsi_wk']
     qqq_mdd = mkt['qqq_mdd']
+
+    soxx_price = mkt['soxx_price']
+    soxx_rsi = mkt['soxx_rsi_wk']
+    soxx_mdd = mkt['soxx_mdd']
     
     # 차트용 데이터
     df_dy = mkt['qqq_dy']
@@ -579,6 +615,13 @@ if mkt is not None:
     q2.metric("QQQ 월봉 RSI", f"{mkt['qqq_rsi_mo']:.1f}", "Month Trend")
     q3.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}", get_rsi_status(qqq_rsi))
     q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_status(qqq_mdd))
+
+    # SOXX Info (QQQ 아래 / TQQQ 위)
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("SOXX 현재가", f"${soxx_price:.2f} ({format_krw(soxx_price*usd_krw_rate)})")
+    s2.metric("SOXX 월봉 RSI", f"{mkt['soxx_rsi_mo']:.1f}", "Month Trend")
+    s3.metric("SOXX 주봉 RSI", f"{soxx_rsi:.1f}", get_rsi_status(soxx_rsi))
+    s4.metric("SOXX MDD", f"{soxx_mdd*100:.2f}%", get_mdd_status(soxx_mdd))
     
     # TQQQ Info
     t1, t2, t3, t4 = st.columns(4)
