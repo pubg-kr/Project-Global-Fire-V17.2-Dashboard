@@ -67,17 +67,23 @@ def check_market_status():
         qqq_mdd_pct = qqq_mdd * 100
         qqq_price = float(qqq['Close'].iloc[-1])
 
-        # TQQQ MDD
-        tqqq['Roll_Max'] = tqqq['Close'].rolling(window=252, min_periods=1).max()
+        # TQQQ MDD (다운로드 전체 기간 기준 cummax)
+        tqqq['Roll_Max'] = tqqq['Close'].cummax()
         tqqq['DD'] = (tqqq['Close'] / tqqq['Roll_Max']) - 1.0
         tqqq_mdd = float(tqqq['DD'].iloc[-1]) if not tqqq.empty else 0
         tqqq_mdd_pct = tqqq_mdd * 100
 
-        # SOXX MDD
-        soxx['Roll_Max'] = soxx['Close'].rolling(window=252, min_periods=1).max()
+        # SOXX MDD (다운로드 전체 기간 기준 cummax - rolling 252일이면 1년 신고가 시 0% 오류 방지)
+        soxx['Roll_Max'] = soxx['Close'].cummax()
         soxx['DD'] = (soxx['Close'] / soxx['Roll_Max']) - 1.0
         soxx_mdd = float(soxx['DD'].iloc[-1]) if not soxx.empty else 0
         soxx_mdd_pct = soxx_mdd * 100
+        soxx_price = float(soxx['Close'].iloc[-1]) if not soxx.empty else 0
+
+        # SOXX 주봉 RSI
+        soxx_wk = soxx[['Close']].resample('W-FRI').last().dropna()
+        soxx_wk['RSI'] = calculate_rsi(soxx_wk['Close'])
+        soxx_rsi_wk = float(soxx_wk['RSI'].iloc[-1]) if len(soxx_wk) >= 14 else 0
 
         # 2. 알림 메시지 구성 (Logic V23.3 The Endgame)
         alert_triggered = False
@@ -115,17 +121,21 @@ def check_market_status():
             alert_triggered = True
         
         # 3. 결과 전송
+        status_block = (
+            f"📊 *Status Check*\n"
+            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ MDD {qqq_mdd_pct:.2f}%\n"
+            f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} │ MDD {soxx_mdd_pct:.2f}%\n"
+            f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
+        )
         if alert_triggered:
-            msg += f"📊 **Status Check**\nQQQ: ${qqq_price:.2f} (주봉 RSI {qqq_rsi_wk:.1f} / 월봉 RSI {qqq_rsi_mo:.1f})\n"
-            msg += f"MDD: QQQ {qqq_mdd_pct:.2f}% / TQQQ {tqqq_mdd_pct:.2f}% / SOXX {soxx_mdd_pct:.2f}%\n"
+            msg += status_block
             send_telegram(msg)
         else:
             # 생존 신고
             send_health_check = os.environ.get('SEND_DAILY_HEALTH', 'false').lower() == 'true'
             if send_health_check:
-                health_msg = f"✅ **[일일 점검] 시장 정상 (V23.3)**\n\n"
-                health_msg += f"📊 **QQQ**: ${qqq_price:.2f} (주봉 RSI {qqq_rsi_wk:.1f} / 월봉 RSI {qqq_rsi_mo:.1f})\n"
-                health_msg += f"📉 **MDD**: QQQ {qqq_mdd_pct:.2f}% / TQQQ {tqqq_mdd_pct:.2f}% / SOXX {soxx_mdd_pct:.2f}%\n"
+                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.3)*\n\n"
+                health_msg += status_block
                 health_msg += "💡 평시 적립: 월급 500만 원은 Level 목표 비중에 맞춰 분할 투입."
                 send_telegram(health_msg)
             print(f"✅ 시장 양호 (QQQ 주봉 RSI: {qqq_rsi_wk:.1f}, MDD: {qqq_mdd_pct:.1f}%) - 알림 미발송")

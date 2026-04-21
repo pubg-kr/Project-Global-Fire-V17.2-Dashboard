@@ -155,13 +155,20 @@ def get_market_data():
         tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
         usd_rsi_wk, usd_mdd = calculate_indicators(usd_wk)
         
-        calculate_indicators(soxx_dy)
+        # SOXX RSI (일봉 → W-FRI 리샘플링) + MDD (cummax 전체 기간 기준)
+        soxx_wk_for_rsi = soxx_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
+            'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
+        calculate_indicators(soxx_wk_for_rsi)
+        soxx_rsi_wk = float(soxx_wk_for_rsi['RSI'].iloc[-1])
+
+        soxx_dy['Roll_Max'] = soxx_dy['Close'].cummax()
+        soxx_dy['DD'] = (soxx_dy['Close'] / soxx_dy['Roll_Max']) - 1.0
         soxx_mdd = float(soxx_dy['DD'].iloc[-1])
 
         return {
             'qqq_dy': qqq_dy, 'qqq_price': qqq_price,
             'qqq_rsi_wk': qqq_rsi_wk, 'qqq_rsi_mo': qqq_rsi_mo, 'qqq_mdd': qqq_mdd,
-            'soxx_dy': soxx_dy, 'soxx_price': soxx_price, 'soxx_mdd': soxx_mdd,
+            'soxx_dy': soxx_dy, 'soxx_price': soxx_price, 'soxx_rsi_wk': soxx_rsi_wk, 'soxx_mdd': soxx_mdd,
             'tqqq_wk': tqqq_wk, 'tqqq_price': tqqq_price, 'tqqq_rsi_wk': tqqq_rsi_wk, 'tqqq_mdd': tqqq_mdd,
             'usd_wk': usd_wk, 'usd_price': usd_price, 'usd_rsi_wk': usd_rsi_wk, 'usd_mdd': usd_mdd,
             'usd_krw': current_rate
@@ -318,13 +325,21 @@ if mkt is not None:
     q3.metric("QQQ 월봉 RSI", f"{qqq_rsi_mo:.1f}", get_rsi_label(qqq_rsi_mo))
     q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_label(qqq_mdd))
 
+    # SOXX
+    soxx_rsi_wk_val = mkt['soxx_rsi_wk']
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("SOXX 현재가", f"${mkt['soxx_price']:.2f} ({format_krw(mkt['soxx_price']*usd_krw_rate)})")
+    s2.metric("SOXX 주봉 RSI", f"{soxx_rsi_wk_val:.1f}", get_rsi_label(soxx_rsi_wk_val))
+    s3.metric("SOXX MDD", f"{mkt['soxx_mdd']*100:.2f}%", get_mdd_label(mkt['soxx_mdd']))
+    s4.metric("환율", f"{int(usd_krw_rate):,}원/$")
+
     # TQQQ
     tqqq_rsi_wk_val = mkt['tqqq_rsi_wk']
     t1, t2, t3, t4 = st.columns(4)
     t1.metric("TQQQ 현재가", f"${tqqq_price:.2f} ({format_krw(tqqq_price*usd_krw_rate)})")
     t2.metric("TQQQ 주봉 RSI", f"{tqqq_rsi_wk_val:.1f}", get_rsi_label(tqqq_rsi_wk_val))
     t3.metric("TQQQ MDD", f"{mkt['tqqq_mdd']*100:.2f}%", get_mdd_label(mkt['tqqq_mdd']))
-    t4.metric("SOXX MDD", f"{mkt['soxx_mdd']*100:.2f}%", get_mdd_label(mkt['soxx_mdd']))
+    t4.metric("USD MDD", f"{mkt['usd_mdd']*100:.2f}%", get_mdd_label(mkt['usd_mdd']))
 
     # USD
     usd_rsi_wk_val = mkt['usd_rsi_wk']
@@ -332,7 +347,7 @@ if mkt is not None:
     u1.metric("USD 현재가", f"${usd_price:.2f} ({format_krw(usd_price*usd_krw_rate)})")
     u2.metric("USD 주봉 RSI", f"{usd_rsi_wk_val:.1f}", get_rsi_label(usd_rsi_wk_val))
     u3.metric("USD MDD", f"{mkt['usd_mdd']*100:.2f}%", get_mdd_label(mkt['usd_mdd']))
-    u4.metric("환율", f"{int(usd_krw_rate):,}원/$")
+    u4.metric("SOXX MDD", f"{mkt['soxx_mdd']*100:.2f}%", get_mdd_label(mkt['soxx_mdd']))
 
     # --- 2. 포트폴리오 진단 ---
     st.markdown("---")
