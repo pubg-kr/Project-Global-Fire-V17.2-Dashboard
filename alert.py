@@ -85,6 +85,11 @@ def check_market_status():
         soxx_wk['RSI'] = calculate_rsi(soxx_wk['Close'])
         soxx_rsi_wk = float(soxx_wk['RSI'].iloc[-1]) if len(soxx_wk) >= 14 else 0
 
+        # SOXX 월봉 RSI
+        soxx_mo = soxx[['Close']].resample('MS').last().dropna()
+        soxx_mo['RSI'] = calculate_rsi(soxx_mo['Close'])
+        soxx_rsi_mo = float(soxx_mo['RSI'].iloc[-1]) if len(soxx_mo) >= 14 else 0
+
         # 2. 알림 메시지 구성 (Logic V23.3 The Endgame)
         alert_triggered = False
         msg = "🔥 **[Global Fire V23.3] 긴급 브리핑** 🔥\n\n"
@@ -124,7 +129,7 @@ def check_market_status():
         status_block = (
             f"📊 *Status Check*\n"
             f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ MDD {qqq_mdd_pct:.2f}%\n"
-            f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} │ MDD {soxx_mdd_pct:.2f}%\n"
+            f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ MDD {soxx_mdd_pct:.2f}%\n"
             f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
         )
         if alert_triggered:
