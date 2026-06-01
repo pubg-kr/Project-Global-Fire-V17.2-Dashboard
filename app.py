@@ -66,9 +66,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V23.3", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V23.5", layout="wide", page_icon="🔥")
 
-# V23.3 Level Configuration
+# V23.5 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -91,14 +91,18 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 23.3 The Endgame
+### 📜 Master Protocol (요약) - Ver 23.5 The Endgame
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
 2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 BOXX 복구.
-3.  **[광기 차단]:** QQQ 주봉 RSI 80 도달 시, Level별 목표 현금 비중만큼만 매도하여 BOXX 충전.
+3.  **[광기 차단 및 버블 방어]:** 
+    *   **Level 1 (단기과열):** QQQ/SOXX 주봉/월봉 RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
+    *   **Level 2 (역사적 버블):** QQQ/SOXX 120개월 이평선 이격도 50% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
+    *   매도 후 남은 TQQQ와 USD 잔고가 정확히 50:50이 되도록 매도.
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
-5.  **[월 적립 전시]:** MDD -15% 이하로 스나이퍼 발동 시, 500만원 100% 주식 (TQQQ 50:USD 50) 풀 투입.
-6.  **[승자의 질주]:** 매수는 항상 50:50 기계적 투입. 절대 팔아서 억지로 50:50 비율 맞추지 않는다.
-7.  **[래칫 원칙]:** 한 번 도달한 최고 계좌 자산(ATH)으로 방어력(Level) 영구 고정. 폭락해도 Level은 안 내린다.
+5.  **[월 적립 전시]:** MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
+6.  **[월 적립 버블]:** RSI 80 또는 이격도 50% 초과 시, 500만원 100% 현금(BOXX) 투입.
+7.  **[승자의 질주]:** 매수는 항상 50:50 기계적 투입. 절대 팔아서 억지로 50:50 비율 맞추지 않는다.
+8.  **[래칫 원칙]:** 한 번 도달한 최고 계좌 자산(ATH)으로 방어력(Level) 영구 고정. 레벨업 시 도달 즉시 팔지 않고 파라미터만 변경.
 """
 
 # ==========================================
@@ -122,7 +126,8 @@ def calculate_indicators(df):
 def get_market_data():
     try:
         qqq_dy = yf.download("QQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
-        qqq_mo = yf.download("QQQ", interval="1mo", period="5y", progress=False, auto_adjust=False)
+        qqq_mo = yf.download("QQQ", interval="1mo", period="max", progress=False, auto_adjust=False)
+        soxx_mo = yf.download("SOXX", interval="1mo", period="max", progress=False, auto_adjust=False)
         tqqq_wk = yf.download("TQQQ", interval="1wk", period="2y", progress=False, auto_adjust=False)
         usd_wk = yf.download("USD", interval="1wk", period="2y", progress=False, auto_adjust=False)
         soxx_dy = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
@@ -130,7 +135,7 @@ def get_market_data():
         
         if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty: return None
 
-        for d in [qqq_dy, qqq_mo, tqqq_wk, usd_wk, soxx_dy, exch]:
+        for d in [qqq_dy, qqq_mo, soxx_mo, tqqq_wk, usd_wk, soxx_dy, exch]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
@@ -148,6 +153,12 @@ def get_market_data():
         # QQQ 월봉 RSI (원칙 1-3: 주봉 또는 월봉 RSI 80)
         qqq_rsi_mo, _ = calculate_indicators(qqq_mo)
         
+        # QQQ 월봉 120개월 이평선 이격도 (period=max 데이터로 진짜 120개월 MA 계산)
+        qqq_mo['MA120'] = qqq_mo['Close'].rolling(window=120, min_periods=120).mean()
+        _qqq_ma120_series = qqq_mo['MA120'].dropna()
+        _qqq_ma120 = float(_qqq_ma120_series.iloc[-1]) if not _qqq_ma120_series.empty else None
+        qqq_mo_dev = (float(qqq_mo['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
+        
         # MDD 및 RSI 계산
         calculate_indicators(qqq_dy)
         qqq_mdd = float(qqq_dy['DD'].iloc[-1])
@@ -161,14 +172,21 @@ def get_market_data():
         calculate_indicators(soxx_wk_for_rsi)
         soxx_rsi_wk = float(soxx_wk_for_rsi['RSI'].iloc[-1])
 
+        # SOXX 월봉 RSI 및 120개월 이평선 이격도 (period=max 데이터로 진짜 120개월 MA 계산)
+        soxx_rsi_mo, _ = calculate_indicators(soxx_mo)
+        soxx_mo['MA120'] = soxx_mo['Close'].rolling(window=120, min_periods=120).mean()
+        _soxx_ma120_series = soxx_mo['MA120'].dropna()
+        _soxx_ma120 = float(_soxx_ma120_series.iloc[-1]) if not _soxx_ma120_series.empty else None
+        soxx_mo_dev = (float(soxx_mo['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
+
         soxx_dy['Roll_Max'] = soxx_dy['Close'].cummax()
         soxx_dy['DD'] = (soxx_dy['Close'] / soxx_dy['Roll_Max']) - 1.0
         soxx_mdd = float(soxx_dy['DD'].iloc[-1])
 
         return {
             'qqq_dy': qqq_dy, 'qqq_price': qqq_price,
-            'qqq_rsi_wk': qqq_rsi_wk, 'qqq_rsi_mo': qqq_rsi_mo, 'qqq_mdd': qqq_mdd,
-            'soxx_dy': soxx_dy, 'soxx_price': soxx_price, 'soxx_rsi_wk': soxx_rsi_wk, 'soxx_mdd': soxx_mdd,
+            'qqq_rsi_wk': qqq_rsi_wk, 'qqq_rsi_mo': qqq_rsi_mo, 'qqq_mdd': qqq_mdd, 'qqq_mo_dev': qqq_mo_dev,
+            'soxx_dy': soxx_dy, 'soxx_price': soxx_price, 'soxx_rsi_wk': soxx_rsi_wk, 'soxx_rsi_mo': soxx_rsi_mo, 'soxx_mdd': soxx_mdd, 'soxx_mo_dev': soxx_mo_dev,
             'tqqq_wk': tqqq_wk, 'tqqq_price': tqqq_price, 'tqqq_rsi_wk': tqqq_rsi_wk, 'tqqq_mdd': tqqq_mdd,
             'usd_wk': usd_wk, 'usd_price': usd_price, 'usd_rsi_wk': usd_rsi_wk, 'usd_mdd': usd_mdd,
             'usd_krw': current_rate
@@ -188,7 +206,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 23.3 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown("**Ver 23.5 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:
@@ -299,9 +317,20 @@ if mkt is not None:
     current_stock_ratio = total_stock_krw / total_assets if total_assets > 0 else 0
     current_cash_ratio = total_cash_krw / total_assets if total_assets > 0 else 0
 
-    # 광기 차단: 주봉 또는 월봉 RSI 80 이상 (원칙 1-3)
+    # 광기 차단 및 버블 방어: 주봉/월봉 RSI 80 이상 또는 이격도 50% 초과
     qqq_rsi_mo = mkt['qqq_rsi_mo']
-    is_circuit_breaker = (qqq_rsi >= 80) or (qqq_rsi_mo >= 80)
+    soxx_rsi_mo = mkt['soxx_rsi_mo']
+    soxx_rsi_wk_val = mkt['soxx_rsi_wk']
+    qqq_mo_dev = mkt['qqq_mo_dev']
+    soxx_mo_dev = mkt['soxx_mo_dev']
+    
+    is_level2_bubble = (qqq_mo_dev >= 1.0) or (soxx_mo_dev >= 1.0)
+    is_level1_bubble = (qqq_rsi >= 80) or (qqq_rsi_mo >= 80) or (soxx_rsi_wk_val >= 80) or (soxx_rsi_mo >= 80)
+    is_circuit_breaker = is_level1_bubble or is_level2_bubble
+
+    if is_level2_bubble:
+        target_cash_ratio = min(1.0, target_cash_ratio + 0.20)
+        target_stock_ratio = 1.0 - target_cash_ratio
 
     # --- 1. 시장 상황판 ---
     st.header("1. 시장 상황판 (Market Status)")
@@ -321,8 +350,8 @@ if mkt is not None:
     # QQQ
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("QQQ 현재가", f"${qqq_price:.2f} ({format_krw(qqq_price*usd_krw_rate)})")
-    q2.metric("QQQ 주봉 RSI", f"{qqq_rsi:.1f}", get_rsi_label(qqq_rsi))
-    q3.metric("QQQ 월봉 RSI", f"{qqq_rsi_mo:.1f}", get_rsi_label(qqq_rsi_mo))
+    q2.metric("QQQ 주봉/월봉 RSI", f"{qqq_rsi:.1f} / {qqq_rsi_mo:.1f}", get_rsi_label(max(qqq_rsi, qqq_rsi_mo)))
+    q3.metric("QQQ 120월 이격도", f"{mkt['qqq_mo_dev']*100:.1f}%", "🚨 버블" if mkt['qqq_mo_dev'] >= 1.0 else "안정")
     q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_label(qqq_mdd))
 
     # SOXX
@@ -330,8 +359,8 @@ if mkt is not None:
     s1, s2, s3, s4 = st.columns(4)
     s1.metric("SOXX 현재가", f"${mkt['soxx_price']:.2f} ({format_krw(mkt['soxx_price']*usd_krw_rate)})")
     s2.metric("SOXX 주봉 RSI", f"{soxx_rsi_wk_val:.1f}", get_rsi_label(soxx_rsi_wk_val))
-    s3.metric("SOXX MDD", f"{mkt['soxx_mdd']*100:.2f}%", get_mdd_label(mkt['soxx_mdd']))
-    s4.metric("환율", f"{int(usd_krw_rate):,}원/$")
+    s3.metric("SOXX 120월 이격도", f"{mkt['soxx_mo_dev']*100:.1f}%", "🚨 버블" if mkt['soxx_mo_dev'] >= 1.0 else "안정")
+    s4.metric("SOXX MDD", f"{mkt['soxx_mdd']*100:.2f}%", get_mdd_label(mkt['soxx_mdd']))
 
     # TQQQ
     tqqq_rsi_wk_val = mkt['tqqq_rsi_wk']
@@ -415,6 +444,9 @@ if mkt is not None:
     if qqq_mdd <= -0.15:
         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: 월급 100% ({format_krw(st.session_state.monthly_contribution)}) 주식 매수 (TQQQ 50 : USD 50). 현금 적립 금지!"
         monthly_color = "red"
+    elif is_circuit_breaker:
+        monthly_msg = f"🚨 **버블 경보 발동**: 신규 적립금 100% ({format_krw(st.session_state.monthly_contribution)}) 현금(BOXX) 매수! (주식 매수 금지)"
+        monthly_color = "orange"
     else:
         buy_stock = st.session_state.monthly_contribution * target_stock_ratio
         buy_cash = st.session_state.monthly_contribution * target_cash_ratio
@@ -445,14 +477,28 @@ if mkt is not None:
             
         elif is_circuit_breaker:
             sell_needed = (total_assets * target_cash_ratio) - total_cash_krw
-            trigger_str = f"주봉 RSI {qqq_rsi:.1f}" if qqq_rsi >= 80 else f"월봉 RSI {qqq_rsi_mo:.1f}"
+            
+            trigger_str = []
+            if qqq_rsi >= 80: trigger_str.append(f"QQQ 주봉 RSI {qqq_rsi:.1f}")
+            if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
+            if soxx_rsi_wk_val >= 80: trigger_str.append(f"SOXX 주봉 RSI {soxx_rsi_wk_val:.1f}")
+            if soxx_rsi_mo >= 80: trigger_str.append(f"SOXX 월봉 RSI {soxx_rsi_mo:.1f}")
+            if qqq_mo_dev >= 1.0: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%")
+            if soxx_mo_dev >= 1.0: trigger_str.append(f"SOXX 120월 이격도 {soxx_mo_dev*100:.1f}%")
+            
+            trigger_msg = ", ".join(trigger_str)
+            
             if sell_needed > 0:
-                final_action = "🚨 CIRCUIT BREAKER (광기 매도)"
-                detail_msg = f"[{trigger_str}] 80 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(BOXX) 채움. (22% 세금 격리 필수)"
+                if is_level2_bubble:
+                    final_action = "🚨 LEVEL 2 BUBBLE (역사적 버블 방어)"
+                    detail_msg = f"[{trigger_msg}] 돌파! 목표 현금 비중에 **+20% 추가 확보** (총 {target_cash_ratio*100:.1f}%).\n{format_krw(sell_needed)} 만큼 매도하여 현금(BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
+                else:
+                    final_action = "🔥 LEVEL 1 BUBBLE (단기 과열 방어)"
+                    detail_msg = f"[{trigger_msg}] 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
                 action_color = "orange"
             else:
                 final_action = "✅ HOLD (현금 벙커 완충)"
-                detail_msg = f"[{trigger_str}] 광기 구간이나, 이미 목표 현금(BOXX) 비중을 충족했습니다."
+                detail_msg = f"[{trigger_msg}] 광기 구간이나, 이미 목표 현금(BOXX) 비중을 충족했습니다."
         
         else:
             final_action = "🧘 STABLING (관망)"

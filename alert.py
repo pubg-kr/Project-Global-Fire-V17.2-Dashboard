@@ -32,20 +32,22 @@ def calculate_rsi(series, window=14):
     return rsi
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V23.3 The Endgame)")
+    print("🔍 시장 데이터 분석 중... (V23.5 The Endgame)")
     
     try:
-        # 데이터 수집 (QQQ, TQQQ, SOXX)
+        # 데이터 수집 (QQQ 일봉 2년, 월봉 전체기간, SOXX 일봉 2년, 월봉 전체기간, TQQQ)
         qqq = yf.download("QQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
+        qqq_mo_data = yf.download("QQQ", interval="1mo", period="max", progress=False, auto_adjust=False)
         tqqq = yf.download("TQQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
         soxx = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
+        soxx_mo_data = yf.download("SOXX", interval="1mo", period="max", progress=False, auto_adjust=False)
         
         if qqq.empty or soxx.empty:
             print("❌ 데이터 수집 실패")
             return
 
         # MultiIndex 처리 (yfinance 최근 변경 대응)
-        for df in [qqq, tqqq, soxx]:
+        for df in [qqq, qqq_mo_data, tqqq, soxx, soxx_mo_data]:
             if isinstance(df.columns, pd.MultiIndex): 
                 df.columns = df.columns.get_level_values(0)
 
@@ -55,10 +57,15 @@ def check_market_status():
         qqq_wk['RSI'] = calculate_rsi(qqq_wk['Close'])
         qqq_rsi_wk = float(qqq_wk['RSI'].iloc[-1])
 
-        # QQQ 월봉 RSI (원칙 1-3: 주봉 또는 월봉 RSI 80)
-        qqq_mo = qqq[['Close']].resample('MS').last().dropna()
-        qqq_mo['RSI'] = calculate_rsi(qqq_mo['Close'])
-        qqq_rsi_mo = float(qqq_mo['RSI'].iloc[-1]) if len(qqq_mo) >= 14 else 0
+        # QQQ 월봉 RSI (period=max 데이터 사용)
+        qqq_mo_data['RSI'] = calculate_rsi(qqq_mo_data['Close'])
+        qqq_rsi_mo = float(qqq_mo_data['RSI'].iloc[-1]) if len(qqq_mo_data) >= 14 else 0
+
+        # QQQ 월봉 120개월 이평선 이격도 (진짜 120개월 MA, min_periods=120)
+        qqq_mo_data['MA120'] = qqq_mo_data['Close'].rolling(window=120, min_periods=120).mean()
+        _qqq_ma120_s = qqq_mo_data['MA120'].dropna()
+        _qqq_ma120 = float(_qqq_ma120_s.iloc[-1]) if not _qqq_ma120_s.empty else None
+        qqq_mo_dev = (float(qqq_mo_data['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
 
         # QQQ MDD (1년 기준)
         qqq['Roll_Max'] = qqq['Close'].rolling(window=252, min_periods=1).max()
@@ -85,21 +92,45 @@ def check_market_status():
         soxx_wk['RSI'] = calculate_rsi(soxx_wk['Close'])
         soxx_rsi_wk = float(soxx_wk['RSI'].iloc[-1]) if len(soxx_wk) >= 14 else 0
 
-        # SOXX 월봉 RSI
-        soxx_mo = soxx[['Close']].resample('MS').last().dropna()
-        soxx_mo['RSI'] = calculate_rsi(soxx_mo['Close'])
-        soxx_rsi_mo = float(soxx_mo['RSI'].iloc[-1]) if len(soxx_mo) >= 14 else 0
+        # SOXX 월봉 RSI 및 120개월 이평선 이격도 (period=max 데이터 사용, min_periods=120)
+        soxx_mo_data['RSI'] = calculate_rsi(soxx_mo_data['Close'])
+        soxx_rsi_mo = float(soxx_mo_data['RSI'].iloc[-1]) if len(soxx_mo_data) >= 14 else 0
+        soxx_mo_data['MA120'] = soxx_mo_data['Close'].rolling(window=120, min_periods=120).mean()
+        _soxx_ma120_s = soxx_mo_data['MA120'].dropna()
+        _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None
+        soxx_mo_dev = (float(soxx_mo_data['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        # 2. 알림 메시지 구성 (Logic V23.3 The Endgame)
+        # 2. 알림 메시지 구성 (Logic V23.5 The Endgame)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V23.3] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V23.5] 긴급 브리핑** 🔥\n\n"
         
-        # (1) RSI 광기 감시 (Circuit Breaker) - 원칙 1-3: 주봉 또는 월봉 RSI 80 이상
-        is_circuit_breaker = (qqq_rsi_wk >= 80) or (qqq_rsi_mo >= 80)
+        # (1) RSI 및 이격도 광기 감시 (Circuit Breaker & Bubble Alert)
+        is_level2_bubble = (qqq_mo_dev >= 1.0) or (soxx_mo_dev >= 1.0)
+        is_level1_bubble = (qqq_rsi_wk >= 80) or (qqq_rsi_mo >= 80) or (soxx_rsi_wk >= 80) or (soxx_rsi_mo >= 80)
+        is_circuit_breaker = is_level1_bubble or is_level2_bubble
+
         if is_circuit_breaker:
-            trigger_str = f"주봉 RSI {qqq_rsi_wk:.1f}" if qqq_rsi_wk >= 80 else f"월봉 RSI {qqq_rsi_mo:.1f}"
-            msg += f"🚨 **[광기 경보] QQQ {trigger_str} 돌파!** (주봉 {qqq_rsi_wk:.1f} / 월봉 {qqq_rsi_mo:.1f})\n"
-            msg += "👉 **ACTION:** 현재 Level의 '목표 현금 비중'에 미달하는 만큼만 TQQQ/USD 매도하여 현금(BOXX) 벙커 충전.\n"
+            trigger_str = []
+            if qqq_rsi_wk >= 80: trigger_str.append(f"QQQ 주봉 RSI {qqq_rsi_wk:.1f}")
+            if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
+            if soxx_rsi_wk >= 80: trigger_str.append(f"SOXX 주봉 RSI {soxx_rsi_wk:.1f}")
+            if soxx_rsi_mo >= 80: trigger_str.append(f"SOXX 월봉 RSI {soxx_rsi_mo:.1f}")
+            if qqq_mo_dev >= 1.0: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%")
+            if soxx_mo_dev >= 1.0: trigger_str.append(f"SOXX 120월 이격도 {soxx_mo_dev*100:.1f}%")
+            
+            trigger_msg = ", ".join(trigger_str)
+
+            if is_level2_bubble:
+                msg += f"🚨 **[역사적 버블 경보] {trigger_msg} 돌파!**\n"
+                msg += "👉 **ACTION:** 기존 목표 현금 비중에 **+20% 추가 확보**하여 비상 현금 비중 설정.\n"
+                msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(BOXX) 매수.\n"
+            else:
+                msg += f"🔥 **[단기 과열 경보] {trigger_msg} 돌파!**\n"
+                msg += "👉 **ACTION:** 현재 Level의 '기존 목표 현금 비중'에 미달하는 만큼만 단순 리밸런싱 매도.\n"
+                msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(BOXX) 매수.\n"
+
             msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C)으로 격리.\n\n"
             alert_triggered = True
 
@@ -126,10 +157,13 @@ def check_market_status():
             alert_triggered = True
         
         # 3. 결과 전송
+        _qqq_ma120_str = f"${_qqq_ma120:.2f}" if _qqq_ma120 else "N/A"
+        _soxx_ma120_str = f"${_soxx_ma120:.2f}" if _soxx_ma120 else "N/A"
+
         status_block = (
             f"📊 *Status Check*\n"
-            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ MDD {qqq_mdd_pct:.2f}%\n"
-            f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ MDD {soxx_mdd_pct:.2f}%\n"
+            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}) │ MDD {qqq_mdd_pct:.2f}%\n"
+            f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ 120월 이격도 {soxx_mo_dev*100:.1f}% ({_soxx_ma120_str}) │ MDD {soxx_mdd_pct:.2f}%\n"
             f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
         )
         if alert_triggered:
@@ -139,7 +173,7 @@ def check_market_status():
             # 생존 신고
             send_health_check = os.environ.get('SEND_DAILY_HEALTH', 'false').lower() == 'true'
             if send_health_check:
-                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.3)*\n\n"
+                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.5)*\n\n"
                 health_msg += status_block
                 health_msg += "💡 평시 적립: 월급 500만 원은 Level 목표 비중에 맞춰 분할 투입."
                 send_telegram(health_msg)
@@ -147,7 +181,7 @@ def check_market_status():
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
-        send_telegram(f"⚠️ [System Error] V23.3 알림 스크립트 오류 발생:\n{e}")
+        send_telegram(f"⚠️ [System Error] V23.5 알림 스크립트 오류 발생:\n{e}")
 
 if __name__ == "__main__":
     check_market_status()
