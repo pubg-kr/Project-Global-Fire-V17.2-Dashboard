@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 23.10 The Endgame)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 24 The Endgame)
 **"The Simple, Unbreakable & Tax-Free"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)

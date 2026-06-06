@@ -32,7 +32,7 @@ def calculate_rsi(series, window=14):
     return rsi
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V23.10 The Endgame)")
+    print("🔍 시장 데이터 분석 중... (V24 The Endgame)")
     
     try:
         # 데이터 수집 (QQQ 일봉 2년, 월봉 전체기간, SOXX 일봉 2년, 월봉 전체기간, TQQQ)
@@ -42,7 +42,7 @@ def check_market_status():
         soxx = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
         soxx_mo_data = yf.download("SOXX", interval="1mo", period="max", progress=False, auto_adjust=False)
         
-        if qqq.empty or soxx.empty:
+        if qqq.empty or soxx.empty or qqq_mo_data.empty or soxx_mo_data.empty or tqqq.empty:
             print("❌ 데이터 수집 실패")
             return
 
@@ -68,7 +68,7 @@ def check_market_status():
         qqq_mo_dev = (float(qqq_mo_data['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
 
         # QQQ MDD (1년 기준)
-        qqq['Roll_Max'] = qqq['Close'].rolling(window=252, min_periods=1).max()
+        qqq['Roll_Max'] = qqq['Close'].cummax()
         qqq['DD'] = (qqq['Close'] / qqq['Roll_Max']) - 1.0
         qqq_mdd = float(qqq['DD'].iloc[-1])
         qqq_mdd_pct = qqq_mdd * 100
@@ -100,9 +100,9 @@ def check_market_status():
         _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None
         soxx_mo_dev = (float(soxx_mo_data['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        # 2. 알림 메시지 구성 (Logic V23.10 The Endgame)
+        # 2. 알림 메시지 구성 (Logic V24 The Endgame)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V23.10] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V24] 긴급 브리핑** 🔥\n\n"
         
         # [원칙 0] 마스터 인덱스: QQQ 월봉만으로 버블 판정. 주봉·SOXX는 표시 전용.
         is_level2_bubble = (qqq_mo_dev >= 1.0)
@@ -119,7 +119,7 @@ def check_market_status():
                 msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 보유 현금의 **30%** 투입.\n"
             elif qqq_mdd <= -0.25:
                 msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 보유 현금의 **20%** 투입.\n"
-            elif qqq_mdd <= -0.15:
+            else:
                 msg += "📉 **일반적인 조정장**\n👉 **ACTION:** 보유 현금의 **10%** 투입.\n"
             
             msg += "💡 *월급 적립금 500만원도 100% 주식 매수에 몰빵 (TQQQ 50 : USD 50)*\n"

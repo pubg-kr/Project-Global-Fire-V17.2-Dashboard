@@ -66,9 +66,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V23.10", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V24", layout="wide", page_icon="🔥")
 
-# V23.10 Level Configuration
+# V24 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -91,7 +91,7 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 23.10 The Endgame
+### 📜 Master Protocol (요약) - Ver 24 The Endgame
 0.  **[기준 지표]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용.
     **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
@@ -123,8 +123,7 @@ def calculate_indicators(df):
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    window = 252 if len(df) >= 252 else len(df)
-    df['Roll_Max'] = df['Close'].rolling(window=window, min_periods=1).max()
+    df['Roll_Max'] = df['Close'].cummax()
     df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
     return float(df['RSI'].iloc[-1]), float(df['DD'].iloc[-1])
 
@@ -138,7 +137,7 @@ def get_market_data():
         soxx_dy = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
         exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
         
-        if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty: return None
+        if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty or qqq_mo.empty or soxx_mo.empty: return None
 
         for d in [qqq_dy, qqq_mo, soxx_mo, tqqq_wk, usd_wk, soxx_dy, exch]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
@@ -155,7 +154,7 @@ def get_market_data():
         calculate_indicators(qqq_wk_for_rsi)
         qqq_rsi_wk = float(qqq_wk_for_rsi['RSI'].iloc[-1])
 
-        # QQQ 월봉 RSI (원칙 1-3: 주봉 또는 월봉 RSI 80)
+        # QQQ 월봉 RSI (원칙 1-3: 월봉 RSI 80 단일 기준)
         qqq_rsi_mo, _ = calculate_indicators(qqq_mo)
         
         # QQQ 월봉 120개월 이평선 이격도 (period=max 데이터로 진짜 120개월 MA 계산)
@@ -211,7 +210,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 23.10 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown("**Ver 24 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:

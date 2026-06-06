@@ -1,5 +1,23 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 24 (The Endgame - Code Hardening & Bug Fix Release)
+- **🔧 QQQ MDD 계산 방식 통일 (cummax)**:
+    - 기존: QQQ MDD는 `rolling(252)` (1년 이동 최고점 기준), SOXX·TQQQ MDD는 `cummax()` (전체 기간 최고점)로 불일치.
+    - 수정: `app.py` `calculate_indicators()` 함수 내 `rolling(252)` → `cummax()` 로 변경. `alert.py` QQQ MDD도 동일하게 변경.
+    - 이제 QQQ, TQQQ, USD, SOXX 모두 **다운로드 전체 기간(2년) 내 절대 최고점** 기준으로 MDD 통일 계산.
+- **🔧 `alert.py` Dead Code 제거**:
+    - MDD 스나이퍼 분기문 마지막 `elif qqq_mdd <= -0.15:` → `else:` 로 수정.
+    - 외부 `if qqq_mdd <= -0.15:` 블록 내부이므로 항상 True인 불필요한 조건식 제거.
+- **🔧 월봉 데이터 Empty 체크 추가 (Silent Failure 방지)**:
+    - `app.py`: `get_market_data()` empty 검사에 `qqq_mo.empty`, `soxx_mo.empty` 추가.
+    - `alert.py`: empty 검사에 `qqq_mo_data.empty`, `soxx_mo_data.empty`, `tqqq.empty` 추가.
+    - 월봉/TQQQ 데이터 수집 실패 시 무음 장애(Silent Failure) 없이 명시적 조기 종료.
+- **🔧 스테일 주석 수정 (`app.py`)**:
+    - "주봉 또는 월봉 RSI 80" → "월봉 RSI 80 단일 기준" 으로 수정. V23.9 로직 변경과 주석 불일치 해소.
+- **✅ `is_loss` 설계 의도 확정**:
+    - `is_loss` 판정은 **보유 주식 포지션의 손익만**으로 계산 (현금 제외). 설계 의도와 일치, 변경 없음.
+    - 근거: [원칙 1] "보유 주식이 파란불(손실)인 상태에서는 어떠한 경우에도 매도 금지".
+
 ### Ver 23.10 (The Endgame - AND Condition for Alert Release)
 - **🔒 버블 경보 해제 조건 AND 명문화**:
     - 기존: "QQQ 월봉 RSI 70 이하 **OR** MDD -15%" → 잘못된 표현.

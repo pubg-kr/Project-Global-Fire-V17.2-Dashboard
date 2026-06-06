@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Core Summary (요약본) - Ver 23.10 The Endgame
+# 🏛️ PROJECT GLOBAL FIRE : Core Summary (요약본) - Ver 24 The Endgame
 
 ## 0. 핵심 전제 (The Unbreakable Foundation)
 1.  **자산(Asset):** **[TQQQ (50%)]** + **[USD (50%)]** (반도체 2배 ETF) 듀얼 엔진.
