@@ -32,7 +32,7 @@ def calculate_rsi(series, window=14):
     return rsi
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V23.6 The Endgame)")
+    print("🔍 시장 데이터 분석 중... (V23.7 The Endgame)")
     
     try:
         # 데이터 수집 (QQQ 일봉 2년, 월봉 전체기간, SOXX 일봉 2년, 월봉 전체기간, TQQQ)
@@ -100,16 +100,34 @@ def check_market_status():
         _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None
         soxx_mo_dev = (float(soxx_mo_data['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        # 2. 알림 메시지 구성 (Logic V23.6 The Endgame)
+        # 2. 알림 메시지 구성 (Logic V23.7 The Endgame)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V23.6] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V23.7] 긴급 브리핑** 🔥\n\n"
         
         # (1) RSI 및 이격도 광기 감시 (Circuit Breaker & Bubble Alert)
         is_level2_bubble = (qqq_mo_dev >= 1.0) or (soxx_mo_dev >= 1.0)
         is_level1_bubble = (qqq_rsi_wk >= 80) or (qqq_rsi_mo >= 80) or (soxx_rsi_wk >= 80) or (soxx_rsi_mo >= 80)
         is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
-        if is_circuit_breaker:
+        # (1) MDD 하이브리드 스나이퍼 감시 (1순위: 전시 상황)
+        if qqq_mdd <= -0.15:
+            msg += f"📉 **[스나이퍼 기회] QQQ MDD {qqq_mdd_pct:.1f}%**\n"
+            
+            if qqq_mdd <= -0.45:
+                msg += "💣 **시스템 붕괴 (Last Bullet)**\n👉 **ACTION:** 보유 현금의 **40%** 영끌 투입!\n"
+            elif qqq_mdd <= -0.35:
+                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 보유 현금의 **30%** 투입.\n"
+            elif qqq_mdd <= -0.25:
+                msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 보유 현금의 **20%** 투입.\n"
+            elif qqq_mdd <= -0.15:
+                msg += "📉 **일반적인 조정장**\n👉 **ACTION:** 보유 현금의 **10%** 투입.\n"
+            
+            msg += "💡 *월급 적립금 500만원도 100% 주식 매수에 몰빵 (TQQQ 50 : USD 50)*\n"
+            msg += "⚠️ *(우선순위 1순위 발동: 모든 버블 경보 무시)*\n\n"
+            alert_triggered = True
+
+        # (2) RSI 및 이격도 광기 감시 (2, 3순위 - 스나이퍼가 아닐 때만 발동)
+        elif is_circuit_breaker:
             trigger_str = []
             if qqq_rsi_wk >= 80: trigger_str.append(f"QQQ 주봉 RSI {qqq_rsi_wk:.1f}")
             if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
@@ -136,22 +154,6 @@ def check_market_status():
             msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C)으로 격리.\n\n"
             alert_triggered = True
 
-        # (2) MDD 하이브리드 스나이퍼 감시
-        if qqq_mdd <= -0.15:
-            msg += f"📉 **[스나이퍼 기회] QQQ MDD {qqq_mdd_pct:.1f}%**\n"
-            
-            if qqq_mdd <= -0.45:
-                msg += "💣 **시스템 붕괴 (Last Bullet)**\n👉 **ACTION:** 보유 현금의 **40%** 영끌 투입!\n"
-            elif qqq_mdd <= -0.35:
-                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 보유 현금의 **30%** 투입.\n"
-            elif qqq_mdd <= -0.25:
-                msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 보유 현금의 **20%** 투입.\n"
-            elif qqq_mdd <= -0.15:
-                msg += "📉 **일반적인 조정장**\n👉 **ACTION:** 보유 현금의 **10%** 투입.\n"
-            
-            msg += "💡 *월급 적립금 500만원도 100% 주식 매수에 몰빵 (TQQQ 50 : USD 50)*\n\n"
-            alert_triggered = True
-
         # (3) TQQQ 긴급 상황
         if tqqq_mdd <= -0.3:
             msg += f"🚨 **[TQQQ 폭락] MDD {tqqq_mdd_pct:.1f}%**\n"
@@ -175,7 +177,7 @@ def check_market_status():
             # 생존 신고
             send_health_check = os.environ.get('SEND_DAILY_HEALTH', 'false').lower() == 'true'
             if send_health_check:
-                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.6)*\n\n"
+                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.7)*\n\n"
                 health_msg += status_block
                 health_msg += "💡 평시 적립: 월급 500만 원은 Level 목표 비중에 맞춰 분할 투입."
                 send_telegram(health_msg)
@@ -183,7 +185,7 @@ def check_market_status():
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
-        send_telegram(f"⚠️ [System Error] V23.6 알림 스크립트 오류 발생:\n{e}")
+        send_telegram(f"⚠️ [System Error] V23.7 알림 스크립트 오류 발생:\n{e}")
 
 if __name__ == "__main__":
     check_market_status()
