@@ -66,9 +66,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V23.9", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V23.10", layout="wide", page_icon="🔥")
 
-# V23.9 Level Configuration
+# V23.10 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -91,7 +91,7 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 23.9 The Endgame
+### 📜 Master Protocol (요약) - Ver 23.10 The Endgame
 0.  **[기준 지표]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용.
     **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
@@ -104,7 +104,7 @@ PROTOCOL_TEXT = """
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
 6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(BOXX) 투입.
-7.  **[버블 경보 해제]:** QQQ **월봉** RSI 70 이하 확실히 마감, 또는 QQQ MDD -15% 이하 시.
+7.  **[버블 경보 해제]:** 조건A: QQQ 월봉RSI 70↓ **AND** 이격도 100%↓ 동시 충족. 또는 조건B(치트키): QQQ MDD -15% 즉시 강제해제.
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시 전면 리셋.
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
@@ -211,7 +211,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 23.9 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown("**Ver 23.10 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:

@@ -1,5 +1,13 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 23.10 (The Endgame - AND Condition for Alert Release)
+- **🔒 버블 경보 해제 조건 AND 명문화**:
+    - 기존: "QQQ 월봉 RSI 70 이하 **OR** MDD -15%" → 잘못된 표현.
+    - 수정: **[조건 A]** QQQ 월봉 RSI 70 이하 **AND** QQQ 이격도 100% 이하 — 두 조건 **동시** 충족 시에만 적립금 정상화.
+    - **[조건 B - 치트키]** QQQ MDD -15% 이하 → A조건 무관, 즉시 강제 해제 + 스나이퍼 발동.
+    - 실제 코드 로직은 `is_circuit_breaker = is_level1_bubble OR is_level2_bubble` 구조로 이미 AND 해제를 구현 중이었음. 이번 업데이트는 **문서와 코드 간의 설명 불일치 해소**가 핵심.
+    - 의미: RSI만 식었어도 이격도가 100% 초과 상태면 경보는 유지되고 계속 100% 현금 적립.
+
 ### Ver 23.9 (The Endgame - Monthly RSI Only)
 - **📅 RSI 판정 기준 월봉 단일화**:
     - 버블 경보 발동 기준을 **"QQQ 월봉 RSI 80 이상"** 으로 완전 단일화. 주봉 RSI 조건 제거.

@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Core Summary (요약본) - Ver 23.9 The Endgame
+# 🏛️ PROJECT GLOBAL FIRE : Core Summary (요약본) - Ver 23.10 The Endgame
 
 ## 0. 핵심 전제 (The Unbreakable Foundation)
 1.  **자산(Asset):** **[TQQQ (50%)]** + **[USD (50%)]** (반도체 2배 ETF) 듀얼 엔진.
@@ -66,7 +66,9 @@
 
 ## 4. 버블 이후 후속 대응 (Post-Bubble Response)
 *   **비상금 보존:** 버블 경보로 확보된 비상금(+20%)은 주식으로 임의 복구 금지. 오직 스나이퍼(MDD -15% 이하) 총알로만 사용.
-*   **적립금 정상화 (경보 해제):** **QQQ 월봉 RSI 70 이하 확실히 마감** 또는 **QQQ MDD -15% 이하** 시 경보 해제 후 월 적립금을 원래 목표 비중대로 분할 투입 재개. (주봉 잔파도에 속지 않는다)
+*   **적립금 정상화 (경보 해제):**
+    *   **[조건 A - AND]:** ① QQQ 월봉 RSI 70 이하 마감 **AND** ② QQQ 이격도 100% 이하 — 둘 다 충족해야 해제.
+    *   **[조건 B - 치트키]:** QQQ MDD -15% 이하 시 즉시 강제 해제 → 스나이퍼 모드 전환.
 *   **전면 리셋:** 계좌 총자산이 '역사상 최고점(ATH)' 갱신 시, 전체 계좌를 현재 Level 목표 비중으로 전면 리밸런싱.
 
 ---
