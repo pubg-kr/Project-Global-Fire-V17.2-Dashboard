@@ -66,9 +66,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V23.5", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V23.6", layout="wide", page_icon="🔥")
 
-# V23.5 Level Configuration
+# V23.6 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -91,18 +91,19 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 23.5 The Endgame
+### 📜 Master Protocol (요약) - Ver 23.6 The Endgame
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
 2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 BOXX 복구.
 3.  **[광기 차단 및 버블 방어]:** 
     *   **Level 1 (단기과열):** QQQ/SOXX 주봉/월봉 RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
-    *   **Level 2 (역사적 버블):** QQQ/SOXX 120개월 이평선 이격도 50% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
+    *   **Level 2 (역사적 버블):** QQQ/SOXX 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
     *   매도 후 남은 TQQQ와 USD 잔고가 정확히 50:50이 되도록 매도.
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
 5.  **[월 적립 전시]:** MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
-6.  **[월 적립 버블]:** RSI 80 또는 이격도 50% 초과 시, 500만원 100% 현금(BOXX) 투입.
-7.  **[승자의 질주]:** 매수는 항상 50:50 기계적 투입. 절대 팔아서 억지로 50:50 비율 맞추지 않는다.
-8.  **[래칫 원칙]:** 한 번 도달한 최고 계좌 자산(ATH)으로 방어력(Level) 영구 고정. 레벨업 시 도달 즉시 팔지 않고 파라미터만 변경.
+6.  **[월 적립 버블]:** RSI 80 또는 이격도 100% 초과 시, 비싼 주식을 사지 않고 500만원 100% 현금(BOXX) 투입.
+7.  **[버블 이후 후속 대응]:** 확보된 비상금은 스나이퍼용으로만 대기. 경보 해제 시 월 적립금 원래 비중 복귀. ATH 갱신 시 전면 리셋.
+8.  **[승자의 질주]:** 매수는 항상 50:50 기계적 투입. 절대 팔아서 억지로 50:50 비율 맞추지 않는다.
+9.  **[래칫 원칙]:** 한 번 도달한 최고 계좌 자산(ATH)으로 방어력(Level) 영구 고정. 레벨업 시 도달 즉시 팔지 않고 파라미터만 변경.
 """
 
 # ==========================================
@@ -206,7 +207,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 23.5 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown("**Ver 23.6 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:
