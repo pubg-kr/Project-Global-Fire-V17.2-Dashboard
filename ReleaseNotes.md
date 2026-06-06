@@ -1,5 +1,14 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 23.8 (The Endgame - The One Index)
+- **🎯 마스터 인덱스 단일화 (The One Index)**:
+    - 버블 경보(RSI, 이격도) 및 스나이퍼(MDD) 발동 기준을 **QQQ(달러 차트) 단일 지표**로 통일.
+    - SOXX 지표는 `app.py` 대시보드 상태 표시판에서 **참고용으로만** 표시되며, 경보 트리거에서 완전히 제거.
+    - `app.py`, `alert.py` 내 `is_level2_bubble`, `is_level1_bubble` 로직에서 SOXX 조건 제거.
+- **📅 버블 경보 해제 조건 명확화**:
+    - 기존 "주봉 또는 월봉 RSI 70 이하" → **"QQQ 월봉 RSI 70 이하 확실히 마감"** 으로 강화.
+    - 주봉(단기) 잔파도 및 가짜 반등에 의한 조기 경보 해제 방지. 월봉 마감 기준으로만 판정.
+
 ### Ver 23.7 (The Endgame - Priority & Tax Shield)
 - **🚦 명령어 우선순위 (Priority) 명문화**:
     - 지표 충돌 시 시스템 강제 집행 순서 확립.
