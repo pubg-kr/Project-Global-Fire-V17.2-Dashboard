@@ -32,7 +32,7 @@ def calculate_rsi(series, window=14):
     return rsi
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V23.8 The Endgame)")
+    print("🔍 시장 데이터 분석 중... (V23.9 The Endgame)")
     
     try:
         # 데이터 수집 (QQQ 일봉 2년, 월봉 전체기간, SOXX 일봉 2년, 월봉 전체기간, TQQQ)
@@ -100,13 +100,13 @@ def check_market_status():
         _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None
         soxx_mo_dev = (float(soxx_mo_data['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        # 2. 알림 메시지 구성 (Logic V23.8 The Endgame)
+        # 2. 알림 메시지 구성 (Logic V23.9 The Endgame)
         alert_triggered = False
-        msg = "🔥 **[Global Fire V23.8] 긴급 브리핑** 🔥\n\n"
+        msg = "🔥 **[Global Fire V23.9] 긴급 브리핑** 🔥\n\n"
         
-        # [원칙 0] 마스터 인덱스: QQQ(달러 차트)만으로 버블 판정. SOXX는 상태 표시 전용.
+        # [원칙 0] 마스터 인덱스: QQQ 월봉만으로 버블 판정. 주봉·SOXX는 표시 전용.
         is_level2_bubble = (qqq_mo_dev >= 1.0)
-        is_level1_bubble = (qqq_rsi_wk >= 80) or (qqq_rsi_mo >= 80)
+        is_level1_bubble = (qqq_rsi_mo >= 80)
         is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
         # (1) MDD 하이브리드 스나이퍼 감시 (1순위: 전시 상황)
@@ -129,7 +129,6 @@ def check_market_status():
         # (2) RSI 및 이격도 광기 감시 (2, 3순위 - 스나이퍼가 아닐 때만 발동)
         elif is_circuit_breaker:
             trigger_str = []
-            if qqq_rsi_wk >= 80: trigger_str.append(f"QQQ 주봉 RSI {qqq_rsi_wk:.1f}")
             if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
             if qqq_mo_dev >= 1.0: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%")
             
@@ -174,7 +173,7 @@ def check_market_status():
             # 생존 신고
             send_health_check = os.environ.get('SEND_DAILY_HEALTH', 'false').lower() == 'true'
             if send_health_check:
-                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.8)*\n\n"
+                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.9)*\n\n"
                 health_msg += status_block
                 health_msg += "💡 평시 적립: 월급 500만 원은 Level 목표 비중에 맞춰 분할 투입."
                 send_telegram(health_msg)
@@ -182,7 +181,7 @@ def check_market_status():
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
-        send_telegram(f"⚠️ [System Error] V23.8 알림 스크립트 오류 발생:\n{e}")
+        send_telegram(f"⚠️ [System Error] V23.9 알림 스크립트 오류 발생:\n{e}")
 
 if __name__ == "__main__":
     check_market_status()

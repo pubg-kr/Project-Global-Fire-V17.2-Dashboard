@@ -66,9 +66,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V23.8", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="Global Fire CRO V23.9", layout="wide", page_icon="🔥")
 
-# V23.8 Level Configuration
+# V23.9 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -91,20 +91,20 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 23.8 The Endgame
-0.  **[기준 지표]** 모든 경보는 **QQQ(달러 차트)** 단일 기준. SOXX는 참고용만.
-    **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ RSI 80 (단기 과열)
+### 📜 Master Protocol (요약) - Ver 23.9 The Endgame
+0.  **[기준 지표]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용.
+    **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
 2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 BOXX 복구.
 3.  **[광기 차단 및 버블 방어]:** 
-    *   **Level 1 (단기과열):** QQQ 주봉/월봉 RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
+    *   **Level 1 (단기과열):** QQQ **월봉** RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
     *   **Level 2 (역사적 버블):** QQQ 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
     *   매도 후 남은 TQQQ와 USD 잔고가 정확히 50:50이 되도록 매도.
     *   **[세금 격리]:** 익절 매도 시 수익금의 22%는 즉시 계좌 C로 격리 (재투자 금지).
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
-6.  **[월 적립 버블]:** QQQ RSI 80 또는 이격도 100% 초과 시, 비싼 주식을 사지 않고 500만원 100% 현금(BOXX) 투입.
-7.  **[버블 경보 해제]:** QQQ **월봉** RSI 70 이하 확실히 마감, 또는 QQQ MDD -15% 이하 시. (주봉 잔파도에 속지 않는다)
+6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(BOXX) 투입.
+7.  **[버블 경보 해제]:** QQQ **월봉** RSI 70 이하 확실히 마감, 또는 QQQ MDD -15% 이하 시.
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시 전면 리셋.
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
@@ -211,7 +211,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 23.8 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown("**Ver 23.9 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:
@@ -330,7 +330,7 @@ if mkt is not None:
     soxx_mo_dev = mkt['soxx_mo_dev']
 
     is_level2_bubble = (qqq_mo_dev >= 1.0)
-    is_level1_bubble = (qqq_rsi >= 80) or (qqq_rsi_mo >= 80)
+    is_level1_bubble = (qqq_rsi_mo >= 80)
     is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
     # [원칙 0] 우선순위: 전시 상황(MDD -15% 이하)이면 버블 경보 목표 비중 조정 완전 무시
@@ -356,7 +356,7 @@ if mkt is not None:
     # QQQ
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("QQQ 현재가", f"${qqq_price:.2f} ({format_krw(qqq_price*usd_krw_rate)})")
-    q2.metric("QQQ 주봉/월봉 RSI", f"{qqq_rsi:.1f} / {qqq_rsi_mo:.1f}", get_rsi_label(max(qqq_rsi, qqq_rsi_mo)))
+    q2.metric("QQQ 주봉RSI(참고) / 월봉RSI(기준)", f"{qqq_rsi:.1f} / {qqq_rsi_mo:.1f}", get_rsi_label(qqq_rsi_mo))
     q3.metric("QQQ 120월 이격도", f"{mkt['qqq_mo_dev']*100:.1f}%", "🚨 버블" if mkt['qqq_mo_dev'] >= 1.0 else "안정")
     q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_label(qqq_mdd))
 
@@ -485,7 +485,6 @@ if mkt is not None:
             sell_needed = (total_assets * target_cash_ratio) - total_cash_krw
             
             trigger_str = []
-            if qqq_rsi >= 80: trigger_str.append(f"QQQ 주봉 RSI {qqq_rsi:.1f}")
             if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
             if qqq_mo_dev >= 1.0: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%")
             
