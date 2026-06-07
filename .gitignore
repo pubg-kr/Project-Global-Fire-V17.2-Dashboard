@@ -24,4 +24,7 @@ venv/
 *.json
 !requirements.txt
 
+# 임시 문서 파일
+*.pdf
+
 app17-6.py

@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import os
 import sys
+from version import APP_VERSION, APP_VERSION_FULL
 
 # 텔레그램 설정
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
@@ -32,7 +33,7 @@ def calculate_rsi(series, window=14):
     return rsi
 
 def check_market_status():
-    print("🔍 시장 데이터 분석 중... (V24 The Endgame)")
+    print(f"🔍 시장 데이터 분석 중... ({APP_VERSION_FULL})")
     
     try:
         # 데이터 수집 (QQQ 일봉 2년, 월봉 전체기간, SOXX 일봉 2년, 월봉 전체기간, TQQQ)
@@ -100,9 +101,9 @@ def check_market_status():
         _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None
         soxx_mo_dev = (float(soxx_mo_data['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        # 2. 알림 메시지 구성 (Logic V24 The Endgame)
+        # 2. 알림 메시지 구성
         alert_triggered = False
-        msg = "🔥 **[Global Fire V24] 긴급 브리핑** 🔥\n\n"
+        msg = f"🔥 **[Global Fire {APP_VERSION}] 긴급 브리핑** 🔥\n\n"
         
         # [원칙 0] 마스터 인덱스: QQQ 월봉만으로 버블 판정. 주봉·SOXX는 표시 전용.
         is_level2_bubble = (qqq_mo_dev >= 1.0)
@@ -138,13 +139,13 @@ def check_market_status():
                 msg += f"🚨 **[역사적 버블 경보] {trigger_msg} 돌파!**\n"
                 msg += "👉 **ACTION:** 기존 목표 현금 비중에 **+20% 추가 확보**하여 비상 현금 비중 설정.\n"
                 msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
-                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(BOXX) 매수.\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
                 msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
             else:
                 msg += f"🔥 **[단기 과열 경보] {trigger_msg} 돌파!**\n"
                 msg += "👉 **ACTION:** 현재 Level의 '기존 목표 현금 비중'에 미달하는 만큼만 단순 리밸런싱 매도.\n"
                 msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
-                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(BOXX) 매수.\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
                 msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
 
             msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C)으로 격리.\n\n"
@@ -173,7 +174,7 @@ def check_market_status():
             # 생존 신고
             send_health_check = os.environ.get('SEND_DAILY_HEALTH', 'false').lower() == 'true'
             if send_health_check:
-                health_msg = f"✅ *[일일 점검] 시장 정상 (V23.10)*\n\n"
+                health_msg = f"✅ *[일일 점검] 시장 정상 ({APP_VERSION_FULL})*\n\n"
                 health_msg += status_block
                 health_msg += "💡 평시 적립: 월급 500만 원은 Level 목표 비중에 맞춰 분할 투입."
                 send_telegram(health_msg)
@@ -181,7 +182,7 @@ def check_market_status():
 
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
-        send_telegram(f"⚠️ [System Error] V23.10 알림 스크립트 오류 발생:\n{e}")
+        send_telegram(f"⚠️ [System Error] {APP_VERSION_FULL} 알림 스크립트 오류 발생:\n{e}")
 
 if __name__ == "__main__":
     check_market_status()

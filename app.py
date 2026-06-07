@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import json
 import os
+from version import APP_VERSION, APP_VERSION_FULL, APP_NAME
 
 # ==========================================
 # 0. 데이터 영구 저장 (Persistence)
@@ -66,9 +67,9 @@ def save_data():
 # ==========================================
 # 1. 설정 및 상수
 # ==========================================
-st.set_page_config(page_title="Global Fire CRO V24", layout="wide", page_icon="🔥")
+st.set_page_config(page_title=f"{APP_NAME} {APP_VERSION}", layout="wide", page_icon="🔥")
 
-# V24 Level Configuration
+# V24.1 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
@@ -90,12 +91,12 @@ LEVEL_CONFIG = {
     18: {"limit": float('inf'), "target_stock": 0.50, "target_cash": 0.50, "name": "LV. 18 (30억+) [🎯 Global FIRE]"}
 }
 
-PROTOCOL_TEXT = """
-### 📜 Master Protocol (요약) - Ver 24 The Endgame
+PROTOCOL_TEXT = f"""
+### 📜 Master Protocol (요약) - Ver {APP_VERSION} The Endgame
 0.  **[기준 지표]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용.
     **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
-2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 BOXX 복구.
+2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 SGOV/BOXX 복구.
 3.  **[광기 차단 및 버블 방어]:** 
     *   **Level 1 (단기과열):** QQQ **월봉** RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
     *   **Level 2 (역사적 버블):** QQQ 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
@@ -103,7 +104,7 @@ PROTOCOL_TEXT = """
     *   **[세금 격리]:** 익절 매도 시 수익금의 22%는 즉시 계좌 C로 격리 (재투자 금지).
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
-6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(BOXX) 투입.
+6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(SGOV/BOXX) 투입.
 7.  **[버블 경보 해제]:** 조건A: QQQ 월봉RSI 70↓ **AND** 이격도 100%↓ 동시 충족. 또는 조건B(치트키): QQQ MDD -15% 즉시 강제해제.
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시 전면 리셋.
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
@@ -210,7 +211,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown("**Ver 24 (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown(f"**Ver {APP_VERSION} (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:
@@ -259,7 +260,7 @@ if mkt is not None:
             st.number_input("A: USD 보유 수량", min_value=0.0, step=0.01, key="a_usd_qty", format="%.2f")
             st.number_input("A: USD 평균단가 (KRW)", min_value=0, step=100, key="a_usd_avg", format="%d")
             st.number_input("A: 원화 예수금", min_value=0, step=100000, key="a_cash_krw", format="%d")
-            st.number_input("A: 달러 예수금 (BOXX)", min_value=0, step=100, key="a_cash_usd", format="%d")
+            st.number_input("A: 달러 예수금 (SGOV/BOXX)", min_value=0, step=100, key="a_cash_usd", format="%d")
 
         with st.expander("⚔️ 계좌 B: 스나이퍼 (매매)", expanded=True):
             st.number_input("B: TQQQ 보유 수량", min_value=0.0, step=0.01, key="b_tqqq_qty", format="%.2f")
@@ -268,7 +269,7 @@ if mkt is not None:
             st.number_input("B: USD 보유 수량", min_value=0.0, step=0.01, key="b_usd_qty", format="%.2f")
             st.number_input("B: USD 평균단가 (KRW)", min_value=0, step=100, key="b_usd_avg", format="%d")
             st.number_input("B: 원화 예수금", min_value=0, step=100000, key="b_cash_krw", format="%d")
-            st.number_input("B: 달러 예수금 (BOXX)", min_value=0, step=100, key="b_cash_usd", format="%d")
+            st.number_input("B: 달러 예수금 (SGOV/BOXX)", min_value=0, step=100, key="b_cash_usd", format="%d")
 
         with st.expander("🛡️ 계좌 C: 벙커 (세금/비상)", expanded=True):
             st.number_input("C: 원화 예수금 (수익금 22%)", min_value=0, step=100000, key="c_cash_krw", format="%d")
@@ -414,7 +415,7 @@ if mkt is not None:
 
     row2_col1, row2_col2, row2_col3, row2_col4 = st.columns(4)
     row2_col1.metric("총 주식 평가금", format_krw(total_stock_krw))
-    row2_col2.metric("총 현금(BOXX)", format_krw(total_cash_krw))
+    row2_col2.metric("총 현금(SGOV/BOXX)", format_krw(total_cash_krw))
     row2_col3.metric("주식 비중", f"{current_stock_ratio*100:.1f}%",
                      f"목표: {target_stock_ratio*100:.1f}%  │  TQ {tq_pct}:{us_pct} USD")
     row2_col4.metric("현금 비중", f"{current_cash_ratio*100:.1f}%", f"목표: {target_cash_ratio*100:.1f}%")
@@ -450,12 +451,12 @@ if mkt is not None:
         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: 월급 100% ({format_krw(st.session_state.monthly_contribution)}) 주식 매수 (TQQQ 50 : USD 50). 현금 적립 금지!"
         monthly_color = "red"
     elif is_circuit_breaker:
-        monthly_msg = f"🚨 **버블 경보 발동**: 신규 적립금 100% ({format_krw(st.session_state.monthly_contribution)}) 현금(BOXX) 매수! (주식 매수 금지)"
+        monthly_msg = f"🚨 **버블 경보 발동**: 신규 적립금 100% ({format_krw(st.session_state.monthly_contribution)}) 현금(SGOV/BOXX) 매수! (주식 매수 금지)"
         monthly_color = "orange"
     else:
         buy_stock = st.session_state.monthly_contribution * target_stock_ratio
         buy_cash = st.session_state.monthly_contribution * target_cash_ratio
-        monthly_msg = f"✅ **평시 적립**: 월급 {format_krw(st.session_state.monthly_contribution)}을 Level 목표비율에 맞춰 주식 {format_krw(buy_stock)} / 현금(BOXX) {format_krw(buy_cash)} 배분 매수."
+        monthly_msg = f"✅ **평시 적립**: 월급 {format_krw(st.session_state.monthly_contribution)}을 Level 목표비율에 맞춰 주식 {format_krw(buy_stock)} / 현금(SGOV/BOXX) {format_krw(buy_cash)} 배분 매수."
     
     # 매매/스나이핑 가이드
     final_action = ""
@@ -492,14 +493,14 @@ if mkt is not None:
             if sell_needed > 0:
                 if is_level2_bubble:
                     final_action = "🚨 LEVEL 2 BUBBLE (역사적 버블 방어)"
-                    detail_msg = f"[{trigger_msg}] 돌파! 목표 현금 비중에 **+20% 추가 확보** (총 {target_cash_ratio*100:.1f}%).\n{format_krw(sell_needed)} 만큼 매도하여 현금(BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
+                    detail_msg = f"[{trigger_msg}] 돌파! 목표 현금 비중에 **+20% 추가 확보** (총 {target_cash_ratio*100:.1f}%).\n{format_krw(sell_needed)} 만큼 매도하여 현금(SGOV/BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
                 else:
                     final_action = "🔥 LEVEL 1 BUBBLE (단기 과열 방어)"
-                    detail_msg = f"[{trigger_msg}] 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
+                    detail_msg = f"[{trigger_msg}] 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(SGOV/BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
                 action_color = "orange"
             else:
                 final_action = "✅ HOLD (현금 벙커 완충)"
-                detail_msg = f"[{trigger_msg}] 광기 구간이나, 이미 목표 현금(BOXX) 비중을 충족했습니다."
+                detail_msg = f"[{trigger_msg}] 광기 구간이나, 이미 목표 현금(SGOV/BOXX) 비중을 충족했습니다."
         
         else:
             final_action = "🧘 STABLING (관망)"

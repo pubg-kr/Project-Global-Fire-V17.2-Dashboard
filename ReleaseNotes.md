@@ -1,5 +1,21 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 24.1 (The Endgame - Tax Hacking Precision Update)
+- **🛡️ 세금 해킹 기준 정밀화 (SGOV 잔고 기준 명문화)**:
+    - 기존: 현금 벙커를 막연히 BOXX로만 운용.
+    - 수정: 금융소득종합과세 기준을 '계좌 총자산'이 아닌 **'SGOV 현금 잔고(평가금액)' 3억 원**을 기준으로 정확히 명문화.
+    - **근거**: TQQQ·USD는 배당이 없으므로 종합과세 대상은 오직 SGOV 배당금. SGOV 잔고 3억 원 시 연 배당 약 1,500만 원 → 2,000만 원 한도 내 안전.
+    - **Phase 1 (SGOV 잔고 3억 이하)**: 현금 벙커를 SGOV로 운용하여 연 ~5% 배당 수취. (종합과세 안전 구간)
+    - **Phase 2 (SGOV 잔고 3억 초과 시점부터)**: 기존 SGOV는 유지, 이후 신규 유입 현금은 전액 BOXX로만 매수하여 49.5% 세율 원천 차단.
+- **📝 문서 전체 표기 통일**:
+    - `TradingCoreLogic.md` 내 모든 `(BOXX)` 표기를 `(SGOV/BOXX)`로 수정.
+    - 글라이드 패스 표 헤더 `주식(T:U) : 현금(BOXX)` → `주식(T:U) : 현금(SGOV/BOXX)` 수정.
+    - Cash Bunker 헤더 업데이트: `SGOV (SGOV 잔고 3억 이하) / BOXX (SGOV 잔고 3억 초과 분)` 명시.
+- **⚙️ 버전 중앙화 (Version Centralization)**:
+    - `version.py` 신규 생성. `APP_VERSION`, `APP_VERSION_FULL`, `APP_NAME` 변수 관리.
+    - `app.py`, `alert.py` 에서 `from version import ...` 로 임포트하여 하드코딩된 버전 문자열 전면 제거.
+    - 다음 버전 업데이트 시 `version.py` 의 `APP_VERSION` **한 줄만 수정**하면 전체 앱·봇 버전 자동 반영.
+
 ### Ver 24 (The Endgame - Code Hardening & Bug Fix Release)
 - **🔧 QQQ MDD 계산 방식 통일 (cummax)**:
     - 기존: QQQ MDD는 `rolling(252)` (1년 이동 최고점 기준), SOXX·TQQQ MDD는 `cummax()` (전체 기간 최고점)로 불일치.
