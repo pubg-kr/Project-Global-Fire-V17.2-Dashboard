@@ -42,10 +42,16 @@ def check_market_status():
         tqqq = yf.download("TQQQ", interval="1d", period="2y", progress=False, auto_adjust=False)
         soxx = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
         soxx_mo_data = yf.download("SOXX", interval="1mo", period="max", progress=False, auto_adjust=False)
+        fx = yf.download("KRW=X", interval="1d", period="5d", progress=False, auto_adjust=False)
         
         if qqq.empty or soxx.empty or qqq_mo_data.empty or soxx_mo_data.empty or tqqq.empty:
             print("❌ 데이터 수집 실패")
             return
+
+        # 환율 (USD/KRW) - 실패해도 알림 전체가 죽지 않도록 별도 방어
+        if isinstance(fx.columns, pd.MultiIndex):
+            fx.columns = fx.columns.get_level_values(0)
+        usd_krw = float(fx['Close'].iloc[-1]) if not fx.empty else None
 
         # MultiIndex 처리 (yfinance 최근 변경 대응)
         for df in [qqq, qqq_mo_data, tqqq, soxx, soxx_mo_data]:
@@ -160,12 +166,14 @@ def check_market_status():
         # 3. 결과 전송
         _qqq_ma120_str = f"${_qqq_ma120:.2f}" if _qqq_ma120 else "N/A"
         _soxx_ma120_str = f"${_soxx_ma120:.2f}" if _soxx_ma120 else "N/A"
+        _usd_krw_str = f"₩{usd_krw:,.2f}" if usd_krw else "N/A"
 
         status_block = (
             f"📊 *Status Check*\n"
             f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}) │ MDD {qqq_mdd_pct:.2f}%\n"
             f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ 120월 이격도 {soxx_mo_dev*100:.1f}% ({_soxx_ma120_str}) │ MDD {soxx_mdd_pct:.2f}%\n"
             f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
+            f"• USD/KRW: {_usd_krw_str}\n"
         )
         if alert_triggered:
             msg += status_block
