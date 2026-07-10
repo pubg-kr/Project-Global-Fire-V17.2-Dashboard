@@ -28,7 +28,9 @@ def load_data():
         "b_cash_krw": 1000000,
         "b_cash_usd": 15000,
         "c_cash_krw": 0,
-        "ath_assets": 0 # V23.3: 래칫 원칙을 위한 최고 자산액
+        "d_cash_krw": 0,  # V24.4: 계좌 D (가족 생존 계좌) - 투자 절대 금지
+        "ath_assets": 0,  # V23.3: 래칫 원칙을 위한 최고 자산액
+        "sniper_mode_active": False  # V24.4: 스나이핑 원상복구(Break-Even Reload) 추적 플래그
     }
     if os.path.exists(DATA_FILE):
         try:
@@ -59,7 +61,9 @@ def save_data():
         "b_cash_krw": st.session_state.b_cash_krw,
         "b_cash_usd": st.session_state.b_cash_usd,
         "c_cash_krw": st.session_state.c_cash_krw,
-        "ath_assets": st.session_state.ath_assets
+        "d_cash_krw": st.session_state.d_cash_krw,
+        "ath_assets": st.session_state.ath_assets,
+        "sniper_mode_active": st.session_state.sniper_mode_active
     }
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
@@ -92,31 +96,35 @@ LEVEL_CONFIG = {
 }
 
 PROTOCOL_TEXT = f"""
-### 📜 Master Protocol (요약) - Ver {APP_VERSION} The Endgame
-0.  **[기준 지표]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용.
+### 📜 Master Protocol (요약) - Ver {APP_VERSION} The Ultimate Simple
+0.  **[기준 지표/데이터 표준]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용. MDD는 **수정종가(Adj Close)** 기준, 월봉 지표는 **월 마지막 거래일 종가**로 확정.
     **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
-2.  **[스나이핑 원상복구]:** 폭락장 현금 투입 후 '본전'이 되면, 투입 현금 분량만큼만 매도하여 SGOV/BOXX 복구.
+2.  **[핵심] 스나이핑 원상복구 (Break-Even Reload):** 토스증권 이동평균법 하에서, 계좌 총주식 수익률이 **본전(0%) 이상**이 되는 순간 목표 현금 비중(Level 기준)으로 즉시 매도 복구. (트랜치 추적 불필요, 계좌 총수익률만 확인)
 3.  **[광기 차단 및 버블 방어]:** 
     *   **Level 1 (단기과열):** QQQ **월봉** RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
     *   **Level 2 (역사적 버블):** QQQ 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
-    *   매도 후 남은 TQQQ와 USD 잔고가 정확히 50:50이 되도록 매도.
-    *   **[세금 격리]:** 익절 매도 시 수익금의 22%는 즉시 계좌 C로 격리 (재투자 금지).
-4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입.
+    *   매도는 TQQQ/USD **현재 보유 비중대로 비례 매도** (50:50 강제 금지).
+    *   **[세금 격리]:** 익절 매도 시 수익금의 22%는 즉시 계좌 C(파킹통장/CMA)로 격리 (재투자 금지).
+4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입. (환율이 10년 평균 대비 +20% 이상이면 4주 분할 환전)
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
 6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(SGOV/BOXX) 투입.
 7.  **[버블 경보 해제]:** 조건A: QQQ 월봉RSI 70↓ **AND** 이격도 100%↓ 동시 충족. 또는 조건B(치트키): QQQ MDD -15% 즉시 강제해제.
-8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시 전면 리셋.
+8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
+11. **[하이브리드 스나이퍼 - 최후의 보루]:** 보유 현금의 **15%는 영구 보존**하여 MDD -50% 이상 블랙스완 전까지 사용 금지. -15%~-45% 구간은 가용 현금(85%) 기준으로만 투입.
+12. **[블랙 스완 & 가족 생존]:** 계좌 D(최소 12~24개월 생활비)는 투자와 완전 분리, 스나이퍼 총알로 전용 금지. ETF 내부 레버리지 외 신용융자/마진 등 외부 레버리지 절대 금지.
 """
 
 # ==========================================
 # 2. 유틸리티 함수
 # ==========================================
-def calculate_indicators(df):
+def calculate_indicators(df, price_col='Close'):
+    """RSI 및 MDD(Drawdown) 계산. price_col='Adj Close' 지정 시 수정종가 기준으로 MDD 계산 (원칙 0)."""
     if df.empty: return 0, 0
-    delta = df['Close'].diff()
+    col = price_col if price_col in df.columns else 'Close'
+    delta = df[col].diff()
     gain = delta.clip(lower=0)
     loss = (-delta).clip(lower=0)
     avg_gain = gain.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
@@ -124,8 +132,8 @@ def calculate_indicators(df):
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    df['Roll_Max'] = df['Close'].cummax()
-    df['DD'] = (df['Close'] / df['Roll_Max']) - 1.0
+    df['Roll_Max'] = df[col].cummax()
+    df['DD'] = (df[col] / df['Roll_Max']) - 1.0
     return float(df['RSI'].iloc[-1]), float(df['DD'].iloc[-1])
 
 def get_market_data():
@@ -137,13 +145,17 @@ def get_market_data():
         usd_wk = yf.download("USD", interval="1wk", period="2y", progress=False, auto_adjust=False)
         soxx_dy = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
         exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
+        exch_10y = yf.download("KRW=X", period="10y", progress=False, auto_adjust=False)
         
         if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty or qqq_mo.empty or soxx_mo.empty: return None
 
-        for d in [qqq_dy, qqq_mo, soxx_mo, tqqq_wk, usd_wk, soxx_dy, exch]:
+        for d in [qqq_dy, qqq_mo, soxx_mo, tqqq_wk, usd_wk, soxx_dy, exch, exch_10y]:
             if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
 
         current_rate = float(exch['Close'].iloc[-1])
+        # [원칙 2-1] 환율 극단값 방어: 10년 평균 대비 +20% 이상이면 분할 환전 경보
+        fx_10y_avg = float(exch_10y['Close'].mean()) if not exch_10y.empty else current_rate
+        fx_deviation = (current_rate / fx_10y_avg) - 1.0 if fx_10y_avg else 0
         qqq_price = float(qqq_dy['Close'].iloc[-1])
         tqqq_price = float(tqqq_wk['Close'].iloc[-1])
         usd_price = float(usd_wk['Close'].iloc[-1])
@@ -164,12 +176,12 @@ def get_market_data():
         _qqq_ma120 = float(_qqq_ma120_series.iloc[-1]) if not _qqq_ma120_series.empty else None
         qqq_mo_dev = (float(qqq_mo['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
         
-        # MDD 및 RSI 계산
-        calculate_indicators(qqq_dy)
+        # MDD 및 RSI 계산 (원칙 0: QQQ MDD는 '수정종가(Adj Close)' 기준으로 노이즈 제거)
+        calculate_indicators(qqq_dy, price_col='Adj Close')
         qqq_mdd = float(qqq_dy['DD'].iloc[-1])
         
-        tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk)
-        usd_rsi_wk, usd_mdd = calculate_indicators(usd_wk)
+        tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk, price_col='Adj Close')
+        usd_rsi_wk, usd_mdd = calculate_indicators(usd_wk, price_col='Adj Close')
         
         # SOXX RSI (일봉 → W-FRI 리샘플링) + MDD (cummax 전체 기간 기준)
         soxx_wk_for_rsi = soxx_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
@@ -184,8 +196,9 @@ def get_market_data():
         _soxx_ma120 = float(_soxx_ma120_series.iloc[-1]) if not _soxx_ma120_series.empty else None
         soxx_mo_dev = (float(soxx_mo['Close'].iloc[-1]) / _soxx_ma120) - 1.0 if _soxx_ma120 else 0
 
-        soxx_dy['Roll_Max'] = soxx_dy['Close'].cummax()
-        soxx_dy['DD'] = (soxx_dy['Close'] / soxx_dy['Roll_Max']) - 1.0
+        _soxx_dd_col = 'Adj Close' if 'Adj Close' in soxx_dy.columns else 'Close'
+        soxx_dy['Roll_Max'] = soxx_dy[_soxx_dd_col].cummax()
+        soxx_dy['DD'] = (soxx_dy[_soxx_dd_col] / soxx_dy['Roll_Max']) - 1.0
         soxx_mdd = float(soxx_dy['DD'].iloc[-1])
 
         return {
@@ -194,7 +207,7 @@ def get_market_data():
             'soxx_dy': soxx_dy, 'soxx_price': soxx_price, 'soxx_rsi_wk': soxx_rsi_wk, 'soxx_rsi_mo': soxx_rsi_mo, 'soxx_mdd': soxx_mdd, 'soxx_mo_dev': soxx_mo_dev,
             'tqqq_wk': tqqq_wk, 'tqqq_price': tqqq_price, 'tqqq_rsi_wk': tqqq_rsi_wk, 'tqqq_mdd': tqqq_mdd,
             'usd_wk': usd_wk, 'usd_price': usd_price, 'usd_rsi_wk': usd_rsi_wk, 'usd_mdd': usd_mdd,
-            'usd_krw': current_rate
+            'usd_krw': current_rate, 'fx_10y_avg': fx_10y_avg, 'fx_deviation': fx_deviation
         }
     except Exception as e:
         return None
@@ -211,7 +224,7 @@ def format_krw(value):
 # 3. 메인 로직
 # ==========================================
 st.title("🔥 Global Fire CRO System")
-st.markdown(f"**Ver {APP_VERSION} (The Endgame)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
+st.markdown(f"**Ver {APP_VERSION} (The Ultimate Simple)** | System Owner: **Busan Programmer** | Core Asset: **TQQQ & USD (Let them race)**")
 
 saved_data = load_data()
 if "monthly_contribution" not in st.session_state:
@@ -272,7 +285,10 @@ if mkt is not None:
             st.number_input("B: 달러 예수금 (SGOV/BOXX)", min_value=0, step=100, key="b_cash_usd", format="%d")
 
         with st.expander("🛡️ 계좌 C: 벙커 (세금/비상)", expanded=True):
-            st.number_input("C: 원화 예수금 (수익금 22%)", min_value=0, step=100000, key="c_cash_krw", format="%d")
+            st.number_input("C: 원화 예수금 (수익금 22%, 파킹통장/CMA)", min_value=0, step=100000, key="c_cash_krw", format="%d")
+
+        with st.expander("👨‍👩‍👧 계좌 D: 가족 생존 계좌 (투자 절대 금지)", expanded=False):
+            st.number_input("D: 원화 생활비 (12~24개월분)", min_value=0, step=100000, key="d_cash_krw", format="%d", help="투자 계좌와 완벽히 분리. 스나이퍼 총알로 절대 전용 금지. 시스템 총자산/Level 계산에서 제외됩니다.")
 
         st.markdown("---")
         st.number_input("🚨 역대 최고 자산액 (All-Time High)", min_value=0.0, step=1000000.0, key="ath_assets", format="%.0f", help="래칫 원칙: 가장 높았던 자산액을 기준으로 레벨이 영구 고정됩니다.")
@@ -406,6 +422,9 @@ if mkt is not None:
     row1_col2.metric("최고 자산 (ATH)", format_krw(effective_ath), "🔒 자동 추적 중")
     row1_col3.metric("현재 총 자산", format_krw(total_assets))
     row1_col4.metric("통합 수익률", f"{profit_rate:.2f}%", "🔴 손실 절대방어" if is_loss else "🔵 수익 순항")
+
+    if st.session_state.d_cash_krw > 0:
+        st.caption(f"👨‍👩‍👧 **계좌 D (가족 생존 계좌, 시스템 계산 제외):** {format_krw(st.session_state.d_cash_krw)} — 투자 절대 금지, 스나이퍼 재원 전용 불가")
     
     # TQ:USD 비율 계산
     tqqq_ratio_in_stock = total_tqqq_krw / total_stock_krw if total_stock_krw > 0 else 0.5
@@ -444,6 +463,11 @@ if mkt is not None:
     st.markdown("---")
     st.header("3. CRO 실행 명령 (Action Protocol)")
     
+    # [원칙 2-1] 환율 극단값 방어: 10년 평균 대비 +20% 이상이면 분할 환전 경보
+    fx_deviation = mkt.get('fx_deviation', 0)
+    is_fx_extreme = fx_deviation >= 0.20
+    fx_warning = f"\n\n💱 **[환율 경보]** 현재 환율이 10년 평균({format_krw(mkt.get('fx_10y_avg', 0))}/$) 대비 **+{fx_deviation*100:.1f}%** 폭등 상태입니다. 이번 달 환전은 **4주 분할 환전**으로 진행하세요. (환율 예측 매매 아님, 심리적 방어 목적)" if is_fx_extreme else ""
+
     # 월급 적립 가이드
     monthly_msg = ""
     monthly_color = "blue"
@@ -457,30 +481,78 @@ if mkt is not None:
         buy_stock = st.session_state.monthly_contribution * target_stock_ratio
         buy_cash = st.session_state.monthly_contribution * target_cash_ratio
         monthly_msg = f"✅ **평시 적립**: 월급 {format_krw(st.session_state.monthly_contribution)}을 Level 목표비율에 맞춰 주식 {format_krw(buy_stock)} / 현금(SGOV/BOXX) {format_krw(buy_cash)} 배분 매수."
+    monthly_msg += fx_warning
     
     # 매매/스나이핑 가이드
     final_action = ""
     detail_msg = ""
     action_color = "blue"
     
+    # [원칙 3] Last Bullet: 보유 현금의 15%는 영구 보존, 가용 현금은 85%
+    reserve_cash_krw = total_cash_krw * 0.15
+    available_cash_krw = total_cash_krw * 0.85
+
+    def _update_sniper_flag(new_val):
+        """ATH 파일 직접 갱신과 충돌 없이 sniper_mode_active만 부분 업데이트 (원칙 1-2 추적용)"""
+        st.session_state.sniper_mode_active = new_val
+        try:
+            with open(DATA_FILE, "r") as _f:
+                _d = json.load(_f)
+            _d['sniper_mode_active'] = new_val
+            with open(DATA_FILE, "w") as _f:
+                json.dump(_d, _f)
+        except:
+            pass
+
+    # [원칙 1-2] 스나이핑 원상복구 추적: MDD -15% 이하가 한 번이라도 발생하면 플래그 ON,
+    # 이후 사용자가 실제로 리로드(매도+자산정보 갱신)하여 현금 비중이 목표치를 회복하면 자동 OFF.
+    if qqq_mdd <= -0.15 and not st.session_state.sniper_mode_active:
+        _update_sniper_flag(True)
+    elif st.session_state.sniper_mode_active and current_cash_ratio >= target_cash_ratio - 0.001:
+        _update_sniper_flag(False)
+
     if is_loss:
-        final_action = "🛡️ LOSS PROTECTION (절대 방어)"
-        detail_msg = f"헌법 제1조: 현재 포트폴리오가 손실 구간이므로 **어떠한 경우에도 매도를 금지**합니다."
+        # [원칙 1-1] 손실 확정 절대 금지: 본전 미도달 상태에서는 리로드도 절대 발동하지 않음.
+        if qqq_mdd <= -0.15:
+            final_action = "🛡️ LOSS PROTECTION + 스나이퍼 대기 (본전 미도달)"
+            detail_msg = "헌법 제1조: 현재 포트폴리오가 손실 구간이므로 매도는 금지되나, 하락장이므로 아래 [월급 투입 지침]에 따라 신규 적립금은 100% 주식에 몰빵합니다. 계좌 총수익률이 본전(0%)을 넘는 순간 목표 현금 비중으로 자동 리로드됩니다."
+        else:
+            final_action = "🛡️ LOSS PROTECTION (절대 방어)"
+            detail_msg = "헌법 제1조: 현재 포트폴리오가 손실 구간이므로 **어떠한 경우에도 매도를 금지**합니다. (존버)"
         action_color = "red"
     else:
         if qqq_mdd <= -0.15:
-            # MDD Sniper
+            # [원칙 3] MDD Sniper (Last Bullet 적용)
             input_cash = 0
             ratio_str = ""
-            if qqq_mdd <= -0.45: input_cash = total_cash_krw * 0.4; ratio_str = "40% (영끌)"
-            elif qqq_mdd <= -0.35: input_cash = total_cash_krw * 0.3; ratio_str = "30%"
-            elif qqq_mdd <= -0.25: input_cash = total_cash_krw * 0.2; ratio_str = "20%"
-            else: input_cash = total_cash_krw * 0.1; ratio_str = "10%"
-            
+            base_str = ""
+            if qqq_mdd <= -0.50:
+                input_cash = reserve_cash_krw
+                ratio_str = "최후의 보루 100%"
+                base_str = "보유 현금의 15% (Last Bullet)"
+            elif qqq_mdd <= -0.45:
+                input_cash = available_cash_krw * 0.4; ratio_str = "40% (영끌)"; base_str = "가용 현금(85%)의"
+            elif qqq_mdd <= -0.35:
+                input_cash = available_cash_krw * 0.3; ratio_str = "30%"; base_str = "가용 현금(85%)의"
+            elif qqq_mdd <= -0.25:
+                input_cash = available_cash_krw * 0.2; ratio_str = "20%"; base_str = "가용 현금(85%)의"
+            else:
+                input_cash = available_cash_krw * 0.1; ratio_str = "10%"; base_str = "가용 현금(85%)의"
+
             final_action = f"🔫 MDD SNIPER ({ratio_str})"
-            detail_msg = f"하락장 스나이퍼 발동! 계좌 B의 보유 현금 {ratio_str} ({format_krw(input_cash)}) 투입."
+            if qqq_mdd <= -0.50:
+                detail_msg = f"💣 **블랙 스완 (MDD {qqq_mdd*100:.1f}%)!** {base_str} {format_krw(input_cash)} 전액 투입! (그동안 아껴둔 최후의 총알)"
+            else:
+                detail_msg = f"하락장 스나이퍼 발동! {base_str} {ratio_str} ({format_krw(input_cash)}) 투입. (Last Bullet 15%는 미사용 보존 중: {format_krw(reserve_cash_krw)})"
             action_color = "green"
-            
+
+        elif st.session_state.sniper_mode_active:
+            # [핵심 룰] 스나이핑 원상복구 (Account Break-Even Reload): 시장 회복(MDD -15% 초과) + 계좌 본전 이상
+            sell_needed_reload = max(0, (total_assets * target_cash_ratio) - total_cash_krw)
+            final_action = "🔄 SNIPER RELOAD (스나이핑 원상복구)"
+            detail_msg = f"과거 하락장에서 스나이핑한 자금이 본전(0%) 이상으로 회복되었습니다! {format_krw(sell_needed_reload)} 만큼 매도하여 현재 Level의 목표 현금 비중({target_cash_ratio*100:.1f}%)으로 즉시 복구하세요. (TQQQ/USD 현재 보유 비중대로 비례 매도, 토스 이동평균법 하에서 별도 트랜치 추적 불필요, 수익금 22% 세금 격리)"
+            action_color = "orange"
+
         elif is_circuit_breaker:
             sell_needed = (total_assets * target_cash_ratio) - total_cash_krw
             
@@ -493,10 +565,10 @@ if mkt is not None:
             if sell_needed > 0:
                 if is_level2_bubble:
                     final_action = "🚨 LEVEL 2 BUBBLE (역사적 버블 방어)"
-                    detail_msg = f"[{trigger_msg}] 돌파! 목표 현금 비중에 **+20% 추가 확보** (총 {target_cash_ratio*100:.1f}%).\n{format_krw(sell_needed)} 만큼 매도하여 현금(SGOV/BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
+                    detail_msg = f"[{trigger_msg}] 돌파! 목표 현금 비중에 **+20% 추가 확보** (총 {target_cash_ratio*100:.1f}%).\n{format_krw(sell_needed)} 만큼 매도하여 현금(SGOV/BOXX) 채움. (TQQQ/USD 현재 보유 비중대로 비례 매도, 수익금 22% 세금 격리 필수)"
                 else:
                     final_action = "🔥 LEVEL 1 BUBBLE (단기 과열 방어)"
-                    detail_msg = f"[{trigger_msg}] 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(SGOV/BOXX) 채움. (매도 후 TQQQ/USD 잔고 50:50 유지, 수익금 22% 세금 격리 필수)"
+                    detail_msg = f"[{trigger_msg}] 돌파! Level {current_level}의 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼만 매도하여 현금(SGOV/BOXX) 채움. (TQQQ/USD 현재 보유 비중대로 비례 매도, 수익금 22% 세금 격리 필수)"
                 action_color = "orange"
             else:
                 final_action = "✅ HOLD (현금 벙커 완충)"

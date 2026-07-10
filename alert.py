@@ -43,6 +43,7 @@ def check_market_status():
         soxx = yf.download("SOXX", interval="1d", period="2y", progress=False, auto_adjust=False)
         soxx_mo_data = yf.download("SOXX", interval="1mo", period="max", progress=False, auto_adjust=False)
         fx = yf.download("KRW=X", interval="1d", period="5d", progress=False, auto_adjust=False)
+        fx_10y = yf.download("KRW=X", interval="1d", period="10y", progress=False, auto_adjust=False)
         
         if qqq.empty or soxx.empty or qqq_mo_data.empty or soxx_mo_data.empty or tqqq.empty:
             print("❌ 데이터 수집 실패")
@@ -51,7 +52,12 @@ def check_market_status():
         # 환율 (USD/KRW) - 실패해도 알림 전체가 죽지 않도록 별도 방어
         if isinstance(fx.columns, pd.MultiIndex):
             fx.columns = fx.columns.get_level_values(0)
+        if isinstance(fx_10y.columns, pd.MultiIndex):
+            fx_10y.columns = fx_10y.columns.get_level_values(0)
         usd_krw = float(fx['Close'].iloc[-1]) if not fx.empty else None
+        # [원칙 2-1] 환율 극단값 방어: 10년 평균 대비 +20% 이상 폭등 시 분할 환전 경보
+        fx_10y_avg = float(fx_10y['Close'].mean()) if not fx_10y.empty else usd_krw
+        fx_deviation = (usd_krw / fx_10y_avg) - 1.0 if (usd_krw and fx_10y_avg) else 0
 
         # MultiIndex 처리 (yfinance 최근 변경 대응)
         for df in [qqq, qqq_mo_data, tqqq, soxx, soxx_mo_data]:
@@ -74,22 +80,25 @@ def check_market_status():
         _qqq_ma120 = float(_qqq_ma120_s.iloc[-1]) if not _qqq_ma120_s.empty else None
         qqq_mo_dev = (float(qqq_mo_data['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
 
-        # QQQ MDD (1년 기준)
-        qqq['Roll_Max'] = qqq['Close'].cummax()
-        qqq['DD'] = (qqq['Close'] / qqq['Roll_Max']) - 1.0
+        # QQQ MDD (원칙 0: 수정종가 기준, 장중 노이즈 제거)
+        _qqq_dd_col = 'Adj Close' if 'Adj Close' in qqq.columns else 'Close'
+        qqq['Roll_Max'] = qqq[_qqq_dd_col].cummax()
+        qqq['DD'] = (qqq[_qqq_dd_col] / qqq['Roll_Max']) - 1.0
         qqq_mdd = float(qqq['DD'].iloc[-1])
         qqq_mdd_pct = qqq_mdd * 100
         qqq_price = float(qqq['Close'].iloc[-1])
 
-        # TQQQ MDD (다운로드 전체 기간 기준 cummax)
-        tqqq['Roll_Max'] = tqqq['Close'].cummax()
-        tqqq['DD'] = (tqqq['Close'] / tqqq['Roll_Max']) - 1.0
+        # TQQQ MDD (수정종가 기준, 다운로드 전체 기간 cummax)
+        _tqqq_dd_col = 'Adj Close' if 'Adj Close' in tqqq.columns else 'Close'
+        tqqq['Roll_Max'] = tqqq[_tqqq_dd_col].cummax()
+        tqqq['DD'] = (tqqq[_tqqq_dd_col] / tqqq['Roll_Max']) - 1.0
         tqqq_mdd = float(tqqq['DD'].iloc[-1]) if not tqqq.empty else 0
         tqqq_mdd_pct = tqqq_mdd * 100
 
-        # SOXX MDD (다운로드 전체 기간 기준 cummax - rolling 252일이면 1년 신고가 시 0% 오류 방지)
-        soxx['Roll_Max'] = soxx['Close'].cummax()
-        soxx['DD'] = (soxx['Close'] / soxx['Roll_Max']) - 1.0
+        # SOXX MDD (수정종가 기준, 다운로드 전체 기간 cummax - rolling 252일이면 1년 신고가 시 0% 오류 방지)
+        _soxx_dd_col = 'Adj Close' if 'Adj Close' in soxx.columns else 'Close'
+        soxx['Roll_Max'] = soxx[_soxx_dd_col].cummax()
+        soxx['DD'] = (soxx[_soxx_dd_col] / soxx['Roll_Max']) - 1.0
         soxx_mdd = float(soxx['DD'].iloc[-1]) if not soxx.empty else 0
         soxx_mdd_pct = soxx_mdd * 100
         soxx_price = float(soxx['Close'].iloc[-1]) if not soxx.empty else 0
@@ -116,20 +125,23 @@ def check_market_status():
         is_level1_bubble = (qqq_rsi_mo >= 80)
         is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
-        # (1) MDD 하이브리드 스나이퍼 감시 (1순위: 전시 상황)
+        # (1) MDD 하이브리드 스나이퍼 감시 (1순위: 전시 상황) — 원칙 3: Last Bullet(15%) 영구 보존
         if qqq_mdd <= -0.15:
             msg += f"📉 **[스나이퍼 기회] QQQ MDD {qqq_mdd_pct:.1f}%**\n"
             
-            if qqq_mdd <= -0.45:
-                msg += "💣 **시스템 붕괴 (Last Bullet)**\n👉 **ACTION:** 보유 현금의 **40%** 영끌 투입!\n"
+            if qqq_mdd <= -0.50:
+                msg += "💣 **블랙 스완 (Last Bullet 발동)**\n👉 **ACTION:** 그동안 보존해온 '최후의 보루(보유 현금의 15%)' 전액 투입!\n"
+            elif qqq_mdd <= -0.45:
+                msg += "💥 **시스템 붕괴**\n👉 **ACTION:** 가용 현금(보유 현금의 85%)의 **40%** 영끌 투입! (15%는 Last Bullet로 계속 보존)\n"
             elif qqq_mdd <= -0.35:
-                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 보유 현금의 **30%** 투입.\n"
+                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 가용 현금(보유 현금의 85%)의 **30%** 투입.\n"
             elif qqq_mdd <= -0.25:
-                msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 보유 현금의 **20%** 투입.\n"
+                msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 가용 현금(보유 현금의 85%)의 **20%** 투입.\n"
             else:
-                msg += "📉 **일반적인 조정장**\n👉 **ACTION:** 보유 현금의 **10%** 투입.\n"
+                msg += "📉 **일반적인 조정장**\n👉 **ACTION:** 가용 현금(보유 현금의 85%)의 **10%** 투입.\n"
             
             msg += "💡 *월급 적립금 500만원도 100% 주식 매수에 몰빵 (TQQQ 50 : USD 50)*\n"
+            msg += "🔄 *계좌 총수익률이 본전(0%) 이상 회복되면 목표 현금 비중으로 즉시 리로드(원상복구)*\n"
             msg += "⚠️ *(우선순위 1순위 발동: 모든 버블 경보 무시)*\n\n"
             alert_triggered = True
 
@@ -144,23 +156,29 @@ def check_market_status():
             if is_level2_bubble:
                 msg += f"🚨 **[역사적 버블 경보] {trigger_msg} 돌파!**\n"
                 msg += "👉 **ACTION:** 기존 목표 현금 비중에 **+20% 추가 확보**하여 비상 현금 비중 설정.\n"
-                msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
+                msg += "👉 **ACTION:** TQQQ와 USD를 현재 보유 비중대로 비례 매도 (50:50 강제 금지, 세금 최소화).\n"
                 msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
                 msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
             else:
                 msg += f"🔥 **[단기 과열 경보] {trigger_msg} 돌파!**\n"
                 msg += "👉 **ACTION:** 현재 Level의 '기존 목표 현금 비중'에 미달하는 만큼만 단순 리밸런싱 매도.\n"
-                msg += "👉 **ACTION:** 매도 후 남은 TQQQ와 USD의 잔고 평가액이 정확히 50:50이 되도록 매도.\n"
+                msg += "👉 **ACTION:** TQQQ와 USD를 현재 보유 비중대로 비례 매도 (50:50 강제 금지, 세금 최소화).\n"
                 msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
                 msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
 
-            msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C)으로 격리.\n\n"
+            msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C, 파킹통장/CMA)으로 격리.\n\n"
             alert_triggered = True
 
         # (3) TQQQ 긴급 상황
         if tqqq_mdd <= -0.3:
             msg += f"🚨 **[TQQQ 폭락] MDD {tqqq_mdd_pct:.1f}%**\n"
             msg += "👉 3배 레버리지 급락. 방어선 유지 점검.\n\n"
+            alert_triggered = True
+
+        # (4) 환율 극단값 경보 (원칙 2-1)
+        if fx_deviation >= 0.20:
+            msg += f"💱 **[환율 경보] 10년 평균 대비 +{fx_deviation*100:.1f}% 폭등** (현재 ₩{usd_krw:,.0f} / 평균 ₩{fx_10y_avg:,.0f})\n"
+            msg += "👉 **ACTION:** 이번 달 환전은 4주 분할 환전으로 진행 (환율 예측 매매 아님, 심리 방어용).\n\n"
             alert_triggered = True
         
         # 3. 결과 전송
@@ -170,10 +188,10 @@ def check_market_status():
 
         status_block = (
             f"📊 *Status Check*\n"
-            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}) │ MDD {qqq_mdd_pct:.2f}%\n"
+            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}) │ MDD {qqq_mdd_pct:.2f}% (수정종가)\n"
             f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ 120월 이격도 {soxx_mo_dev*100:.1f}% ({_soxx_ma120_str}) │ MDD {soxx_mdd_pct:.2f}%\n"
             f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
-            f"• USD/KRW: {_usd_krw_str}\n"
+            f"• USD/KRW: {_usd_krw_str} │ 10년 평균 대비 {fx_deviation*100:+.1f}%\n"
         )
         if alert_triggered:
             msg += status_block
