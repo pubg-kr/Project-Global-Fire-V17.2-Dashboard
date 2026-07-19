@@ -33,6 +33,9 @@ if "%TELEGRAM_TOKEN%"=="" (
 if "%CHAT_ID%"=="" (
     set /p CHAT_ID=Chat ID가 없습니다. 입력하세요: 
 )
+if "%ATH_ASSETS_KRW%"=="" (
+    echo 참고: ATH_ASSETS_KRW(역대 최고 자산액)가 설정되지 않아 Level 1(시드 펌핑)로 간주됩니다. .env에 추가 권장.
+)
 set SEND_DAILY_HEALTH=true
 
 echo [OK] 설정 완료!

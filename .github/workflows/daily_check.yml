@@ -27,4 +27,7 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           SEND_DAILY_HEALTH: ${{ secrets.SEND_DAILY_HEALTH }}
+          # V24.5: Level 2(이격도) 버블 방어 발동 레벨(LV.7=4억) 판정을 위한 역대 최고 자산액(원화).
+          # 대시보드(app.py)의 "역대 최고 자산액(ATH)" 값을 GitHub Secrets에 동일하게 등록해야 정확히 동작.
+          ATH_ASSETS_KRW: ${{ secrets.ATH_ASSETS_KRW }}
         run: python alert.py

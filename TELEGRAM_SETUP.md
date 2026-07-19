@@ -77,6 +77,7 @@ else:
 $env:TELEGRAM_TOKEN="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890"
 $env:CHAT_ID="123456789"
 $env:SEND_DAILY_HEALTH="true"
+$env:ATH_ASSETS_KRW="150000000"  # V24.5: 대시보드 ATH와 동일하게 설정 (미설정 시 Level 1로 간주)
 python alert.py
 ```
 
@@ -85,6 +86,7 @@ python alert.py
 set TELEGRAM_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz-1234567890
 set CHAT_ID=123456789
 set SEND_DAILY_HEALTH=true
+set ATH_ASSETS_KRW=150000000
 python alert.py
 ```
 
@@ -102,6 +104,7 @@ python alert.py
    - `TELEGRAM_TOKEN`: 봇 토큰
    - `CHAT_ID`: Chat ID
    - `SEND_DAILY_HEALTH`: `true` 또는 `false`
+   - `ATH_ASSETS_KRW` (V24.5 신규): 대시보드(`app.py`)에 입력해둔 **"역대 최고 자산액(ATH)"**과 동일한 원화 숫자 (예: `150000000`). 이 값으로 알림 봇이 현재 Level을 판정하여, 이격도 100% 초과 버블 방어 룰이 Level 7(자산 4억 원) 이상에서만 발동하도록 게이트를 적용합니다. 자산이 늘어날 때마다(레벨업 시) 이 값도 함께 갱신해주세요. **미설정 시 0으로 간주되어 항상 Level 1(시드 펌핑 구간)로 취급됩니다.**
 
 ---
 

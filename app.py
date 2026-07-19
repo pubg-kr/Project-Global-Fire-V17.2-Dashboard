@@ -73,6 +73,10 @@ def save_data():
 # ==========================================
 st.set_page_config(page_title=f"{APP_NAME} {APP_VERSION}", layout="wide", page_icon="🔥")
 
+# V24.5: Level 2(이격도) 버블 방어 발동 레벨 게이트. 이 레벨 미만(시드 펌핑 구간)에서는
+# 120월 이격도 100% 초과 룰을 완전히 무시하고 공격적으로 자산을 불린다 (RSI 80 룰은 전 레벨 유지).
+BUBBLE_LEVEL2_GATE = 7
+
 # V24.1 Level Configuration
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
@@ -98,17 +102,17 @@ LEVEL_CONFIG = {
 PROTOCOL_TEXT = f"""
 ### 📜 Master Protocol (요약) - Ver {APP_VERSION} The Ultimate Simple
 0.  **[기준 지표/데이터 표준]** 모든 경보는 **QQQ 월봉(달러 차트)** 단일 기준. 주봉·SOXX는 참고용. MDD는 **수정종가(Adj Close)** 기준, 월봉 지표는 **월 마지막 거래일 종가**로 확정.
-    **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블) > 3순위: QQQ 월봉 RSI 80 (단기 과열)
+    **[우선순위]** 1순위: QQQ MDD -15% (전시/스나이퍼) > 2순위: QQQ 이격도 100% (역사적 버블, 🚨 Level {BUBBLE_LEVEL2_GATE} 이상 한정) > 3순위: QQQ 월봉 RSI 80 (단기 과열, 전 Level 공통)
 1.  **[헌법] 손실 확정 절대 금지:** 계좌가 마이너스일 때는 절대 팔지 않는다.
 2.  **[핵심] 스나이핑 원상복구 (Break-Even Reload):** 토스증권 이동평균법 하에서, 계좌 총주식 수익률이 **본전(0%) 이상**이 되는 순간 목표 현금 비중(Level 기준)으로 즉시 매도 복구. (트랜치 추적 불필요, 계좌 총수익률만 확인)
 3.  **[광기 차단 및 버블 방어]:** 
-    *   **Level 1 (단기과열):** QQQ **월봉** RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
-    *   **Level 2 (역사적 버블):** QQQ 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**.
+    *   **Level 1 (단기과열, 전 Level 공통):** QQQ **월봉** RSI 80 도달 시, Level 목표 현금 비중만큼만 단순 리밸런싱 매도.
+    *   **Level 2 (역사적 버블, 🚨 Level {BUBBLE_LEVEL2_GATE} 이상 한정 발동):** QQQ 120개월 이평선 이격도 100% 초과 시, 목표 현금 비중에 **+20% 추가 확보**. (Level 1~{BUBBLE_LEVEL2_GATE-1} 시드 펌핑 구간은 물타기 효율 극대화를 위해 이 룰을 완전히 무시)
     *   매도는 TQQQ/USD **현재 보유 비중대로 비례 매도** (50:50 강제 금지).
     *   **[세금 격리]:** 익절 매도 시 수익금의 22%는 즉시 계좌 C(파킹통장/CMA)로 격리 (재투자 금지).
 4.  **[월 적립 평시]:** MDD -15% 이내일 땐 Level 목표 비중에 맞춰 500만원 쪼개서 분할 투입. (환율이 10년 평균 대비 +20% 이상이면 4주 분할 환전)
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
-6.  **[월 적립 버블]:** QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(SGOV/BOXX) 투입.
+6.  **[월 적립 버블, 🚨 Level별 차등]:** Level {BUBBLE_LEVEL2_GATE} 이상에서 QQQ 월봉 RSI 80 또는 이격도 100% 초과 시, 비싼 주식 사지 않고 500만원 100% 현금(SGOV/BOXX) 투입. Level 1~{BUBBLE_LEVEL2_GATE-1} 구간은 FOMO 방지를 위해 버블 경보 중에도 500만원을 Level 목표 비중대로 기계적 매수 지속 (기존 보유 물량 리밸런싱 매도는 정상 집행).
 7.  **[버블 경보 해제]:** 조건A: QQQ 월봉RSI 70↓ **AND** 이격도 100%↓ 동시 충족. 또는 조건B(치트키): QQQ MDD -15% 즉시 강제해제.
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
@@ -345,9 +349,15 @@ if mkt is not None:
     qqq_mo_dev = mkt['qqq_mo_dev']
     soxx_mo_dev = mkt['soxx_mo_dev']
 
-    is_level2_bubble = (qqq_mo_dev >= 1.0)
+    # [V24.5] Level 2(이격도) 버블 방어는 Level {BUBBLE_LEVEL2_GATE} 이상(시드 펌핑 구간 이후)에서만 발동.
+    # Level 1~{BUBBLE_LEVEL2_GATE-1} 구간은 월 적립금의 물타기 효율이 극대화되므로 이격도 룰을 완전히 무시한다.
+    is_level2_bubble_raw = (qqq_mo_dev >= 1.0)
+    is_level2_bubble = is_level2_bubble_raw and (current_level >= BUBBLE_LEVEL2_GATE)
     is_level1_bubble = (qqq_rsi_mo >= 80)
     is_circuit_breaker = is_level1_bubble or is_level2_bubble
+    # [V24.5] 월 적립금 분배용: Level 1~{BUBBLE_LEVEL2_GATE-1}에서는 버블 경보 중에도 100% 현금 전환 없이
+    # Level 목표 비중대로 기계적 매수를 지속 (FOMO 방지, 시드 펌핑 우선).
+    is_seed_pumping_level = current_level < BUBBLE_LEVEL2_GATE
 
     # [원칙 0] 우선순위: 전시 상황(MDD -15% 이하)이면 버블 경보 목표 비중 조정 완전 무시
     if is_level2_bubble and qqq_mdd > -0.15:
@@ -373,7 +383,13 @@ if mkt is not None:
     q1, q2, q3, q4 = st.columns(4)
     q1.metric("QQQ 현재가", f"${qqq_price:.2f} ({format_krw(qqq_price*usd_krw_rate)})")
     q2.metric("QQQ 주봉RSI(참고) / 월봉RSI(기준)", f"{qqq_rsi:.1f} / {qqq_rsi_mo:.1f}", get_rsi_label(qqq_rsi_mo))
-    q3.metric("QQQ 120월 이격도", f"{mkt['qqq_mo_dev']*100:.1f}%", "🚨 버블" if mkt['qqq_mo_dev'] >= 1.0 else "안정")
+    if mkt['qqq_mo_dev'] >= 1.0 and current_level < BUBBLE_LEVEL2_GATE:
+        _qqq_dev_label = f"⚪ 버블(무시, LV<{BUBBLE_LEVEL2_GATE})"
+    elif mkt['qqq_mo_dev'] >= 1.0:
+        _qqq_dev_label = "🚨 버블"
+    else:
+        _qqq_dev_label = "안정"
+    q3.metric("QQQ 120월 이격도", f"{mkt['qqq_mo_dev']*100:.1f}%", _qqq_dev_label)
     q4.metric("QQQ MDD", f"{qqq_mdd*100:.2f}%", get_mdd_label(qqq_mdd))
 
     # SOXX
@@ -474,8 +490,15 @@ if mkt is not None:
     if qqq_mdd <= -0.15:
         monthly_msg = f"📉 **전시 상황 (MDD {qqq_mdd*100:.1f}%)**: 월급 100% ({format_krw(st.session_state.monthly_contribution)}) 주식 매수 (TQQQ 50 : USD 50). 현금 적립 금지!"
         monthly_color = "red"
+    elif is_circuit_breaker and is_seed_pumping_level:
+        # [V24.5] Level 1~{BUBBLE_LEVEL2_GATE-1} 시드 펌핑 구간: FOMO 방지를 위해 버블 경보 중에도
+        # 신규 적립금을 100% 현금으로 돌리지 않고 Level 목표 비중대로 기계적 매수를 지속.
+        buy_stock = st.session_state.monthly_contribution * target_stock_ratio
+        buy_cash = st.session_state.monthly_contribution * target_cash_ratio
+        monthly_msg = f"🌱 **버블 경보 중 시드 펌핑 유지 (LV<{BUBBLE_LEVEL2_GATE})**: 월급 {format_krw(st.session_state.monthly_contribution)}을 Level 목표비율대로 주식 {format_krw(buy_stock)} / 현금(SGOV/BOXX) {format_krw(buy_cash)} 배분 매수. (기존 보유 물량 리밸런싱 매도는 원칙대로 정상 집행)"
+        monthly_color = "blue"
     elif is_circuit_breaker:
-        monthly_msg = f"🚨 **버블 경보 발동**: 신규 적립금 100% ({format_krw(st.session_state.monthly_contribution)}) 현금(SGOV/BOXX) 매수! (주식 매수 금지)"
+        monthly_msg = f"🚨 **버블 경보 발동 (LV{current_level}≥{BUBBLE_LEVEL2_GATE})**: 신규 적립금 100% ({format_krw(st.session_state.monthly_contribution)}) 현금(SGOV/BOXX) 매수! (주식 매수 금지)"
         monthly_color = "orange"
     else:
         buy_stock = st.session_state.monthly_contribution * target_stock_ratio
@@ -557,8 +580,8 @@ if mkt is not None:
             sell_needed = (total_assets * target_cash_ratio) - total_cash_krw
             
             trigger_str = []
-            if qqq_rsi_mo >= 80: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
-            if qqq_mo_dev >= 1.0: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%")
+            if is_level1_bubble: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
+            if is_level2_bubble: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}% (LV{current_level}≥{BUBBLE_LEVEL2_GATE})")
             
             trigger_msg = ", ".join(trigger_str)
             
@@ -577,6 +600,8 @@ if mkt is not None:
         else:
             final_action = "🧘 STABLING (관망)"
             detail_msg = "평시 구간입니다. '승자의 질주(Let Winners Run)'를 즐기며 기존 포지션을 유지하십시오. 듀얼 리밸런싱은 오직 '월 적립금(새 돈)'으로만 맞춥니다."
+            if is_level2_bubble_raw:
+                detail_msg += f"\n\n🌱 *[V24.5] 참고: QQQ 120월 이격도가 100%를 초과했지만, 현재 Level {current_level}은 시드 펌핑 구간(LV<{BUBBLE_LEVEL2_GATE})이므로 역사적 버블 방어 룰을 의도적으로 무시하고 공격적으로 자산을 불립니다.*"
 
     st.info(f"💡 **보유 자산 실행 (Asset Action):** {final_action}")
     if action_color == "red": st.error(detail_msg)
