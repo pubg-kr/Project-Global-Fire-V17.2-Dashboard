@@ -9,31 +9,6 @@ from version import APP_VERSION, APP_VERSION_FULL
 TOKEN = os.environ.get('TELEGRAM_TOKEN')
 CHAT_ID = os.environ.get('CHAT_ID')
 
-# V24.5: Level 2(이격도) 버블 방어 발동 레벨 게이트 (app.py와 동일, LV.7 = 자산 4억 이상)
-BUBBLE_LEVEL2_GATE = 7
-
-# app.py의 LEVEL_CONFIG 중 Level 판정에 필요한 'limit'(ATH 상한)만 축약 복제.
-# alert.py는 포트폴리오 잔고를 추적하지 않으므로, 환경변수 ATH_ASSETS_KRW(역대 최고 자산액)로
-# 현재 Level을 판정하여 버블 경보 룰의 발동 여부를 결정한다. (미설정 시 0 → 항상 LV.1 취급)
-LEVEL_LIMITS_KRW = [
-    50000000, 100000000, 150000000, 200000000, 300000000, 400000000,
-    550000000, 700000000, 850000000, 1000000000, 1250000000, 1500000000,
-    1750000000, 2000000000, 2300000000, 2600000000, 3000000000, float('inf')
-]
-
-def determine_level(ath_assets):
-    for i, limit in enumerate(LEVEL_LIMITS_KRW):
-        if ath_assets <= limit:
-            return i + 1
-    return len(LEVEL_LIMITS_KRW)
-
-def get_current_level():
-    try:
-        ath_assets = float(os.environ.get('ATH_ASSETS_KRW', '0') or '0')
-    except ValueError:
-        ath_assets = 0.0
-    return determine_level(ath_assets), ath_assets
-
 def send_telegram(message):
     if not TOKEN or not CHAT_ID:
         print("❌ 텔레그램 토큰 또는 Chat ID가 설정되지 않았습니다.")
@@ -101,9 +76,17 @@ def check_market_status():
 
         # QQQ 월봉 120개월 이평선 이격도 (진짜 120개월 MA, min_periods=120)
         qqq_mo_data['MA120'] = qqq_mo_data['Close'].rolling(window=120, min_periods=120).mean()
+        _qqq_dev_series = (qqq_mo_data['Close'] / qqq_mo_data['MA120'] - 1.0).dropna()
+        qqq_mo_dev = float(_qqq_dev_series.iloc[-1]) if not _qqq_dev_series.empty else 0
         _qqq_ma120_s = qqq_mo_data['MA120'].dropna()
         _qqq_ma120 = float(_qqq_ma120_s.iloc[-1]) if not _qqq_ma120_s.empty else None
-        qqq_mo_dev = (float(qqq_mo_data['Close'].iloc[-1]) / _qqq_ma120) - 1.0 if _qqq_ma120 else 0
+        # [V24.6, 원칙 4-조건A] 이격도가 100% 미만으로 마감된 '연속 개월수' (최근값부터 역순 카운트)
+        qqq_dev_cool_months = 0
+        for _v in reversed(_qqq_dev_series.tolist()):
+            if _v < 1.0:
+                qqq_dev_cool_months += 1
+            else:
+                break
 
         # QQQ MDD (원칙 0: 수정종가 기준, 장중 노이즈 제거)
         _qqq_dd_col = 'Adj Close' if 'Adj Close' in qqq.columns else 'Close'
@@ -145,14 +128,13 @@ def check_market_status():
         alert_triggered = False
         msg = f"🔥 **[Global Fire {APP_VERSION}] 긴급 브리핑** 🔥\n\n"
         
-        # [V24.5] Level 2(이격도) 버블 방어는 Level {BUBBLE_LEVEL2_GATE} 이상(자산 4억원 이상)에서만 발동.
-        # ATH_ASSETS_KRW 환경변수(미설정 시 0=LV.1)로 현재 Level을 판정한다.
-        current_level, ath_assets_krw = get_current_level()
-        is_seed_pumping_level = current_level < BUBBLE_LEVEL2_GATE
-
         # [원칙 0] 마스터 인덱스: QQQ 월봉만으로 버블 판정. 주봉·SOXX는 표시 전용.
-        is_level2_bubble_raw = (qqq_mo_dev >= 1.0)
-        is_level2_bubble = is_level2_bubble_raw and (current_level >= BUBBLE_LEVEL2_GATE)
+        # [V24.6] 레벨 구분 삭제: 이격도 100% 방어 룰은 자산 규모(Level) 불문 전 Level 공통 발동.
+        # is_level2_bubble_live: 이번 달(진행 중 포함) 즉시 판정 신호 (진입은 언제나 즉시).
+        # is_level2_bubble: 실제 방어 행동 게이트. [원칙 4-조건A]에 따라 '2개월 연속' 100% 미만
+        # 마감 전까지는 방어 모드를 유지하여 노이즈로 인한 휩소(왔다갔다)를 방지한다.
+        is_level2_bubble_live = (qqq_mo_dev >= 1.0)
+        is_level2_bubble = is_level2_bubble_live or (qqq_dev_cool_months < 2)
         is_level1_bubble = (qqq_rsi_mo >= 80)
         is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
@@ -180,36 +162,27 @@ def check_market_status():
         elif is_circuit_breaker:
             trigger_str = []
             if is_level1_bubble: trigger_str.append(f"QQQ 월봉 RSI {qqq_rsi_mo:.1f}")
-            if is_level2_bubble: trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}% (LV{current_level}≥{BUBBLE_LEVEL2_GATE})")
+            if is_level2_bubble:
+                _dev_note = "" if is_level2_bubble_live else f" (냉각 {qqq_dev_cool_months}/2개월)"
+                trigger_str.append(f"QQQ 120월 이격도 {qqq_mo_dev*100:.1f}%{_dev_note}")
             
             trigger_msg = ", ".join(trigger_str)
 
             if is_level2_bubble:
-                msg += f"🚨 **[역사적 버블 경보] {trigger_msg} 돌파!**\n"
-                msg += "👉 **ACTION:** 기존 목표 현금 비중에 **+20% 추가 확보**하여 비상 현금 비중 설정.\n"
-                msg += "👉 **ACTION:** TQQQ와 USD를 현재 보유 비중대로 비례 매도 (50:50 강제 금지, 세금 최소화).\n"
-                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
-                msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
-            elif is_seed_pumping_level:
-                # [V24.5] Level {BUBBLE_LEVEL2_GATE} 미만 시드 펌핑 구간: 단기 과열(RSI 80)만으로 발동, 100% 현금 대신 리밸런싱만.
-                msg += f"🔥 **[단기 과열 경보] {trigger_msg} 돌파! (시드 펌핑 구간 LV{current_level})**\n"
-                msg += "👉 **ACTION:** 현재 Level의 '기존 목표 현금 비중'에 미달하는 만큼만 단순 리밸런싱 매도.\n"
-                msg += "👉 **ACTION:** TQQQ와 USD를 현재 보유 비중대로 비례 매도 (50:50 강제 금지, 세금 최소화).\n"
-                msg += f"👉 **ACTION:** 신규 적립금 500만 원은 FOMO 방지를 위해 100% 현금 전환 없이 Level 목표 비중대로 기계적 매수 지속.\n"
+                # [V24.6] 하이브리드 방어: 100% 현금이 아닌 '방어 비중(목표+20%p 현금)'으로 계속 매수 (전 Level 공통)
+                msg += f"🚨 **[역사적 버블 경보] {trigger_msg} 돌파! (전 Level 공통)**\n"
+                msg += "👉 **ACTION:** 자산 규모(Level) 불문, 목표 현금 비중에 **+20%p 추가 확보**하여 비상 현금 비중 설정.\n"
+                msg += "👉 **ACTION:** 기존 보유 주식도 부족분만큼 즉시 비례 매도 (TQQQ/USD 현재 보유 비중대로, 50:50 강제 금지, 세금 최소화).\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원은 100% 현금이 아닌 '방어 비중(목표+20%p 현금)'에 맞춰 계속 기계적 매수 (FOMO 방지).\n"
+                msg += "👉 **ACTION:** [해제] 이격도가 100% 미만으로 **2개월 연속** 마감되어야 평시 목표비중으로 정상화됩니다.\n"
             else:
                 msg += f"🔥 **[단기 과열 경보] {trigger_msg} 돌파!**\n"
                 msg += "👉 **ACTION:** 현재 Level의 '기존 목표 현금 비중'에 미달하는 만큼만 단순 리밸런싱 매도.\n"
                 msg += "👉 **ACTION:** TQQQ와 USD를 현재 보유 비중대로 비례 매도 (50:50 강제 금지, 세금 최소화).\n"
-                msg += "👉 **ACTION:** 신규 적립금 500만 원 전액 100% 현금(SGOV/BOXX) 매수.\n"
-                msg += "👉 **ACTION:** 확보된 비상금은 임의 주식 복구 금지 (스나이퍼용 대기).\n"
+                msg += "👉 **ACTION:** 신규 적립금 500만 원은 평시 목표비중대로 계속 매수 (이격도는 안정적이므로 방어 비중 전환 없음).\n"
 
             msg += "⚠️ **Tax Shield:** 수익금의 22%는 세금 통장(C, 파킹통장/CMA)으로 격리.\n\n"
             alert_triggered = True
-
-        # (2b) [V24.5] 이격도 버블이지만 시드 펌핑 구간(LV<{BUBBLE_LEVEL2_GATE})이라 의도적으로 무시된 경우 참고 안내
-        if is_level2_bubble_raw and not is_level2_bubble and not (qqq_mdd <= -0.15):
-            msg += f"🌱 **[참고] QQQ 120월 이격도 {qqq_mo_dev*100:.1f}% 초과 (역사적 버블권)**\n"
-            msg += f"👉 현재 Level {current_level}은 시드 펌핑 구간(LV<{BUBBLE_LEVEL2_GATE})이므로 역사적 버블 방어 룰을 의도적으로 무시하고 공격적으로 자산을 불립니다. (ATH_ASSETS_KRW 환경변수 기준)\n\n"
 
         # (3) TQQQ 긴급 상황
         if tqqq_mdd <= -0.3:
@@ -230,8 +203,7 @@ def check_market_status():
 
         status_block = (
             f"📊 *Status Check*\n"
-            f"• Level: LV.{current_level} (ATH ₩{ath_assets_krw:,.0f}) │ 이격도 버블 게이트: LV≥{BUBBLE_LEVEL2_GATE}\n"
-            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}) │ MDD {qqq_mdd_pct:.2f}% (수정종가)\n"
+            f"• QQQ: ${qqq_price:.2f} │ 주봉RSI {qqq_rsi_wk:.1f} / 월봉RSI {qqq_rsi_mo:.1f} │ 120월 이격도 {qqq_mo_dev*100:.1f}% ({_qqq_ma120_str}, 냉각 {qqq_dev_cool_months}개월) │ MDD {qqq_mdd_pct:.2f}% (수정종가)\n"
             f"• SOXX: ${soxx_price:.2f} │ 주봉RSI {soxx_rsi_wk:.1f} / 월봉RSI {soxx_rsi_mo:.1f} │ 120월 이격도 {soxx_mo_dev*100:.1f}% ({_soxx_ma120_str}) │ MDD {soxx_mdd_pct:.2f}%\n"
             f"• TQQQ: MDD {tqqq_mdd_pct:.2f}%\n"
             f"• USD/KRW: {_usd_krw_str} │ 10년 평균 대비 {fx_deviation*100:+.1f}%\n"
