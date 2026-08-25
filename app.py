@@ -30,7 +30,8 @@ def load_data():
         "c_cash_krw": 0,
         "d_cash_krw": 0,  # V24.4: 계좌 D (가족 생존 계좌) - 투자 절대 금지
         "ath_assets": 0,  # V23.3: 래칫 원칙을 위한 최고 자산액
-        "sniper_mode_active": False  # V24.4: 스나이핑 원상복구(Break-Even Reload) 추적 플래그
+        "sniper_mode_active": False,  # V24.4: 스나이핑 원상복구(Break-Even Reload) 추적 플래그
+        "sniper_base_cash_krw": 0.0  # V24.7: 스나이핑 시작 시점 총현금 기준점 고정(Lock) 값
     }
     if os.path.exists(DATA_FILE):
         try:
@@ -63,7 +64,8 @@ def save_data():
         "c_cash_krw": st.session_state.c_cash_krw,
         "d_cash_krw": st.session_state.d_cash_krw,
         "ath_assets": st.session_state.ath_assets,
-        "sniper_mode_active": st.session_state.sniper_mode_active
+        "sniper_mode_active": st.session_state.sniper_mode_active,
+        "sniper_base_cash_krw": st.session_state.sniper_base_cash_krw
     }
     with open(DATA_FILE, "w") as f:
         json.dump(data, f)
@@ -113,7 +115,7 @@ PROTOCOL_TEXT = f"""
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
-11. **[하이브리드 스나이퍼 - 최후의 보루]:** 보유 현금의 **15%는 영구 보존**하여 MDD -50% 이상 블랙스완 전까지 사용 금지. -15%~-45% 구간은 가용 현금(85%) 기준으로만 투입.
+11. **[하이브리드 스나이퍼 - 기준점 고정, 🚨 V24.7 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거). 타점: -15%(10%) → -25%(15%) → -35%(25%) → -45%(35%) → -50% 이상(최후의 보루 15% 전액).
 12. **[블랙 스완 & 가족 생존]:** 계좌 D(최소 12~24개월 생활비)는 투자와 완전 분리, 스나이퍼 총알로 전용 금지. ETF 내부 레버리지 외 신용융자/마진 등 외부 레버리지 절대 금지.
 """
 
@@ -514,28 +516,34 @@ if mkt is not None:
     detail_msg = ""
     action_color = "blue"
     
-    # [원칙 3] Last Bullet: 보유 현금의 15%는 영구 보존, 가용 현금은 85%
-    reserve_cash_krw = total_cash_krw * 0.15
-    available_cash_krw = total_cash_krw * 0.85
-
-    def _update_sniper_flag(new_val):
-        """ATH 파일 직접 갱신과 충돌 없이 sniper_mode_active만 부분 업데이트 (원칙 1-2 추적용)"""
+    # [원칙 3, V24.7] 기준점 고정(Lock): 스나이핑이 시작되는 시점의 총현금을 100%로 고정하여,
+    # 이후 실시간으로 줄어드는 잔여 현금이 아닌 이 고정값을 기준으로 모든 타점을 계산한다.
+    def _update_sniper_flag(new_val, base_cash=None):
+        """ATH 파일 직접 갱신과 충돌 없이 sniper_mode_active/기준점 고정값만 부분 업데이트 (원칙 1-2, 3 추적용)"""
         st.session_state.sniper_mode_active = new_val
+        if base_cash is not None:
+            st.session_state.sniper_base_cash_krw = base_cash
         try:
             with open(DATA_FILE, "r") as _f:
                 _d = json.load(_f)
             _d['sniper_mode_active'] = new_val
+            if base_cash is not None:
+                _d['sniper_base_cash_krw'] = base_cash
             with open(DATA_FILE, "w") as _f:
                 json.dump(_d, _f)
         except:
             pass
 
-    # [원칙 1-2] 스나이핑 원상복구 추적: MDD -15% 이하가 한 번이라도 발생하면 플래그 ON,
-    # 이후 사용자가 실제로 리로드(매도+자산정보 갱신)하여 현금 비중이 목표치를 회복하면 자동 OFF.
+    # [원칙 1-2] 스나이핑 원상복구 추적: MDD -15% 이하가 한 번이라도 발생하면 플래그 ON + 그 시점 총현금을 기준점으로 고정,
+    # 이후 사용자가 실제로 리로드(매도+자산정보 갱신)하여 현금 비중이 목표치를 회복하면 자동 OFF + 기준점 초기화.
     if qqq_mdd <= -0.15 and not st.session_state.sniper_mode_active:
-        _update_sniper_flag(True)
+        _update_sniper_flag(True, base_cash=total_cash_krw)
     elif st.session_state.sniper_mode_active and current_cash_ratio >= target_cash_ratio - 0.001:
-        _update_sniper_flag(False)
+        _update_sniper_flag(False, base_cash=0)
+
+    # 기준점이 아직 없다면(과거 데이터 호환/최초 진입 스냅샷) 현재 총현금을 임시 기준으로 사용
+    sniper_base_cash_krw = st.session_state.sniper_base_cash_krw if st.session_state.sniper_base_cash_krw > 0 else total_cash_krw
+    reserve_cash_krw = sniper_base_cash_krw * 0.15  # 최후의 보루 (Last Bullet)
 
     if is_loss:
         # [원칙 1-1] 손실 확정 절대 금지: 본전 미도달 상태에서는 리로드도 절대 발동하지 않음.
@@ -548,28 +556,26 @@ if mkt is not None:
         action_color = "red"
     else:
         if qqq_mdd <= -0.15:
-            # [원칙 3] MDD Sniper (Last Bullet 적용)
+            # [원칙 3, V24.7] MDD Sniper: 기준점 고정(Lock)된 총현금 100%에 고정 비율을 곱해 즉시 투입 (Last Bullet 15% 포함)
             input_cash = 0
             ratio_str = ""
-            base_str = ""
             if qqq_mdd <= -0.50:
-                input_cash = reserve_cash_krw
-                ratio_str = "최후의 보루 100%"
-                base_str = "보유 현금의 15% (Last Bullet)"
+                input_cash = sniper_base_cash_krw * 0.15
+                ratio_str = "15% (최후의 보루 전액)"
             elif qqq_mdd <= -0.45:
-                input_cash = available_cash_krw * 0.4; ratio_str = "40% (영끌)"; base_str = "가용 현금(85%)의"
+                input_cash = sniper_base_cash_krw * 0.35; ratio_str = "35% (영끌)"
             elif qqq_mdd <= -0.35:
-                input_cash = available_cash_krw * 0.3; ratio_str = "30%"; base_str = "가용 현금(85%)의"
+                input_cash = sniper_base_cash_krw * 0.25; ratio_str = "25%"
             elif qqq_mdd <= -0.25:
-                input_cash = available_cash_krw * 0.2; ratio_str = "20%"; base_str = "가용 현금(85%)의"
+                input_cash = sniper_base_cash_krw * 0.15; ratio_str = "15%"
             else:
-                input_cash = available_cash_krw * 0.1; ratio_str = "10%"; base_str = "가용 현금(85%)의"
+                input_cash = sniper_base_cash_krw * 0.10; ratio_str = "10%"
 
-            final_action = f"🔫 MDD SNIPER ({ratio_str})"
+            final_action = f"🔫 MDD SNIPER (총현금의 {ratio_str})"
             if qqq_mdd <= -0.50:
-                detail_msg = f"💣 **블랙 스완 (MDD {qqq_mdd*100:.1f}%)!** {base_str} {format_krw(input_cash)} 전액 투입! (그동안 아껴둔 최후의 총알)"
+                detail_msg = f"💣 **블랙 스완 (MDD {qqq_mdd*100:.1f}%)!** 스나이핑 시작 시점 총현금의 15% (최후의 보루) {format_krw(input_cash)} 전액 투입! (그동안 아껴둔 최후의 총알)"
             else:
-                detail_msg = f"하락장 스나이퍼 발동! {base_str} {ratio_str} ({format_krw(input_cash)}) 투입. (Last Bullet 15%는 미사용 보존 중: {format_krw(reserve_cash_krw)})"
+                detail_msg = f"하락장 스나이퍼 발동! 스나이핑 시작 시점 총현금의 {ratio_str} ({format_krw(input_cash)}) 투입. (최후의 보루 15%는 미사용 보존 중: {format_krw(reserve_cash_krw)})"
             action_color = "green"
 
         elif st.session_state.sniper_mode_active:
