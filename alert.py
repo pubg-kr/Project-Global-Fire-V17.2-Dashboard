@@ -138,16 +138,18 @@ def check_market_status():
         is_level1_bubble = (qqq_rsi_mo >= 80)
         is_circuit_breaker = is_level1_bubble or is_level2_bubble
 
-        # (1) MDD 하이브리드 스나이퍼 감시 (1순위: 전시 상황) — 원칙 3 V24.7: 기준점 고정(Lock) + 최후의 보루(15%) 영구 보존
+        # (1) 딥 스나이퍼 감시 (1순위: 전시 상황) — 원칙 3 V24.8: 6단계(-65% 완결형) + 최후의 보루(15%) 영구 보존
         if qqq_mdd <= -0.15:
-            msg += f"📉 **[스나이퍼 기회] QQQ MDD {qqq_mdd_pct:.1f}%**\n"
+            msg += f"📉 **[딥 스나이퍼 기회] QQQ MDD {qqq_mdd_pct:.1f}%**\n"
             
-            if qqq_mdd <= -0.50:
-                msg += "💣 **블랙 스완 (Last Bullet 발동)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **15% (최후의 보루)** 전액 투입!\n"
+            if qqq_mdd <= -0.65:
+                msg += "💣 **블랙 스완 (양안전쟁/닷컴 버블급 심해! Last Bullet 발동)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **15% (최후의 보루)** 전액 투입!\n"
+            elif qqq_mdd <= -0.55:
+                msg += "☢️ **금융위기 (2008년 리먼 바닥 수준)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **20%** 투입! (Last Bullet는 -65% 돌파 전까지 보존)\n"
             elif qqq_mdd <= -0.45:
-                msg += "💥 **시스템 붕괴**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **35%** 영끌 투입! (나머지 15%는 Last Bullet로 계속 보존)\n"
+                msg += "💥 **시스템 붕괴**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **20%** 투입! (Last Bullet는 -65% 돌파 전까지 보존)\n"
             elif qqq_mdd <= -0.35:
-                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **25%** 투입.\n"
+                msg += "🏦 **대세 하락장 (2022년 수준)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **20%** 투입.\n"
             elif qqq_mdd <= -0.25:
                 msg += "🌪️ **중급 하락장 (코로나 초기 수준)**\n👉 **ACTION:** 스나이핑 시작 시점 총현금의 **15%** 투입.\n"
             else:

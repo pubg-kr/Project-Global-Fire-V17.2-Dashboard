@@ -75,26 +75,20 @@ def save_data():
 # ==========================================
 st.set_page_config(page_title=f"{APP_NAME} {APP_VERSION}", layout="wide", page_icon="🔥")
 
-# V24.1 Level Configuration
+# V24.8 Level Configuration (12단계, 25억 최종 목표 보수적 개편)
 LEVEL_CONFIG = {
     1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
     2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
     3: {"limit": 150000000, "target_stock": 0.875, "target_cash": 0.125, "name": "LV. 3 (~1.5억)"},
-    4: {"limit": 200000000, "target_stock": 0.85, "target_cash": 0.15, "name": "LV. 4 (~2억)"},
-    5: {"limit": 300000000, "target_stock": 0.825, "target_cash": 0.175, "name": "LV. 5 (~3억)"},
-    6: {"limit": 400000000, "target_stock": 0.80, "target_cash": 0.20, "name": "LV. 6 (~4억)"},
-    7: {"limit": 550000000, "target_stock": 0.775, "target_cash": 0.225, "name": "LV. 7 (~5.5억)"},
-    8: {"limit": 700000000, "target_stock": 0.75, "target_cash": 0.25, "name": "LV. 8 (~7억)"},
-    9: {"limit": 850000000, "target_stock": 0.725, "target_cash": 0.275, "name": "LV. 9 (~8.5억)"},
-    10: {"limit": 1000000000, "target_stock": 0.70, "target_cash": 0.30, "name": "LV. 10 (~10억) [🎯 1차: 육아/퇴사]"},
-    11: {"limit": 1250000000, "target_stock": 0.675, "target_cash": 0.325, "name": "LV. 11 (~12.5억)"},
-    12: {"limit": 1500000000, "target_stock": 0.65, "target_cash": 0.35, "name": "LV. 12 (~15억)"},
-    13: {"limit": 1750000000, "target_stock": 0.625, "target_cash": 0.375, "name": "LV. 13 (~17.5억)"},
-    14: {"limit": 2000000000, "target_stock": 0.60, "target_cash": 0.40, "name": "LV. 14 (~20억)"},
-    15: {"limit": 2300000000, "target_stock": 0.575, "target_cash": 0.425, "name": "LV. 15 (~23억) [🎯 2차: Coast FIRE]"},
-    16: {"limit": 2600000000, "target_stock": 0.55, "target_cash": 0.45, "name": "LV. 16 (~26억)"},
-    17: {"limit": 3000000000, "target_stock": 0.525, "target_cash": 0.475, "name": "LV. 17 (~30억)"},
-    18: {"limit": float('inf'), "target_stock": 0.50, "target_cash": 0.50, "name": "LV. 18 (30억+) [🎯 Global FIRE]"}
+    4: {"limit": 300000000, "target_stock": 0.85, "target_cash": 0.15, "name": "LV. 4 (~3억)"},
+    5: {"limit": 500000000, "target_stock": 0.80, "target_cash": 0.20, "name": "LV. 5 (~5억)"},
+    6: {"limit": 800000000, "target_stock": 0.75, "target_cash": 0.25, "name": "LV. 6 (~8억)"},
+    7: {"limit": 1150000000, "target_stock": 0.70, "target_cash": 0.30, "name": "LV. 7 (~11.5억) [🎯 1차: 아내 퇴사/육아]"},
+    8: {"limit": 1500000000, "target_stock": 0.65, "target_cash": 0.35, "name": "LV. 8 (~15억) [SGOV 3억→BOXX 혼합]"},
+    9: {"limit": 1850000000, "target_stock": 0.60, "target_cash": 0.40, "name": "LV. 9 (~18.5억)"},
+    10: {"limit": 2200000000, "target_stock": 0.55, "target_cash": 0.45, "name": "LV. 10 (~22억) [🎯 2차: 조기 은퇴]"},
+    11: {"limit": 2500000000, "target_stock": 0.525, "target_cash": 0.475, "name": "LV. 11 (~25억)"},
+    12: {"limit": float('inf'), "target_stock": 0.50, "target_cash": 0.50, "name": "LV. 12 (25억+) [🎯 Global FIRE]"}
 }
 
 PROTOCOL_TEXT = f"""
@@ -115,8 +109,9 @@ PROTOCOL_TEXT = f"""
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
-11. **[하이브리드 스나이퍼 - 기준점 고정, 🚨 V24.7 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거). 타점: -15%(10%) → -25%(15%) → -35%(25%) → -45%(35%) → -50% 이상(최후의 보루 15% 전액).
+11. **[딥 스나이퍼 - 기준점 고정, 🚨 V24.8 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거). 6단계 딥 스나이퍼(-65% 완결형): -15%(10%) → -25%(15%) → -35%(20%) → -45%(20%) → -55%(20%) → -65% 이상(최후의 보루 15% 전액). 검증: 합계 100%.
 12. **[블랙 스완 & 가족 생존]:** 계좌 D(최소 12~24개월 생활비)는 투자와 완전 분리, 스나이퍼 총알로 전용 금지. ETF 내부 레버리지 외 신용융자/마진 등 외부 레버리지 절대 금지.
+13. **[상품 리스크 대응 - 🚨 자발적 손절 아님]:** 폭락(-50%, -80% 등) 자체는 1배수 전환 사유가 아니다. 오직 **운용사의 '조기 청산(상장폐지)' 공식 발표 시에만** 대체 ETF(TQQQ→QLD/QQQ, USD→SOXL/SMH)로 잔존 가치를 옮겨 담는다.
 """
 
 # ==========================================
@@ -225,7 +220,7 @@ def get_market_data():
 def determine_level(ath_assets):
     for level, config in sorted(LEVEL_CONFIG.items()):
         if ath_assets <= config['limit']: return level
-    return 18
+    return 12
 
 def format_krw(value):
     return f"{int(value):,}원"
@@ -426,13 +421,13 @@ if mkt is not None:
     st.markdown("---")
     st.header("2. 포트폴리오 진단 (Diagnosis)")
     
-    if current_level < 18:
+    if current_level < 12:
         prev_limit = LEVEL_CONFIG[current_level-1]['limit'] if current_level > 1 else 0
         next_limit = LEVEL_CONFIG[current_level]['limit']
         progress = (effective_ath - prev_limit) / (next_limit - prev_limit) if (next_limit - prev_limit) > 0 else 0
         st.progress(max(0.0, min(1.0, progress)), text=f"🚀 Level Up 진행률 → 다음 레벨까지 {format_krw(max(0, next_limit - effective_ath))}")
     else:
-        st.progress(1.0, text="🏆 Final Level 달성! (Global FIRE)")
+        st.progress(1.0, text="🏆 LV. 12 달성! 25억 Global FIRE 완성. 게임 클리어! 🎯")
 
     # 자동 ATH 갱신 알림
     if effective_ath > st.session_state.ath_assets and st.session_state.ath_assets > 0:
@@ -543,7 +538,7 @@ if mkt is not None:
 
     # 기준점이 아직 없다면(과거 데이터 호환/최초 진입 스냅샷) 현재 총현금을 임시 기준으로 사용
     sniper_base_cash_krw = st.session_state.sniper_base_cash_krw if st.session_state.sniper_base_cash_krw > 0 else total_cash_krw
-    reserve_cash_krw = sniper_base_cash_krw * 0.15  # 최후의 보루 (Last Bullet)
+    reserve_cash_krw = sniper_base_cash_krw * 0.15  # 최후의 보루 (Last Bullet, -65% 이상에서만 발동)
 
     if is_loss:
         # [원칙 1-1] 손실 확정 절대 금지: 본전 미도달 상태에서는 리로드도 절대 발동하지 않음.
@@ -556,26 +551,29 @@ if mkt is not None:
         action_color = "red"
     else:
         if qqq_mdd <= -0.15:
-            # [원칙 3, V24.7] MDD Sniper: 기준점 고정(Lock)된 총현금 100%에 고정 비율을 곱해 즉시 투입 (Last Bullet 15% 포함)
+            # [원칙 3, V24.8] 딥 스나이퍼: 6단계 (-65% 완결형)
+            # 기준점 고정(Lock)된 총현금 100%에 고정 비율을 곱해 즉시 투입
             input_cash = 0
             ratio_str = ""
-            if qqq_mdd <= -0.50:
+            if qqq_mdd <= -0.65:
                 input_cash = sniper_base_cash_krw * 0.15
                 ratio_str = "15% (최후의 보루 전액)"
+            elif qqq_mdd <= -0.55:
+                input_cash = sniper_base_cash_krw * 0.20; ratio_str = "20% (금융위기/리먼 바닥)"
             elif qqq_mdd <= -0.45:
-                input_cash = sniper_base_cash_krw * 0.35; ratio_str = "35% (영끌)"
+                input_cash = sniper_base_cash_krw * 0.20; ratio_str = "20% (시스템 붕괴)"
             elif qqq_mdd <= -0.35:
-                input_cash = sniper_base_cash_krw * 0.25; ratio_str = "25%"
+                input_cash = sniper_base_cash_krw * 0.20; ratio_str = "20% (대세 하락장)"
             elif qqq_mdd <= -0.25:
-                input_cash = sniper_base_cash_krw * 0.15; ratio_str = "15%"
+                input_cash = sniper_base_cash_krw * 0.15; ratio_str = "15% (중급 하락장)"
             else:
-                input_cash = sniper_base_cash_krw * 0.10; ratio_str = "10%"
+                input_cash = sniper_base_cash_krw * 0.10; ratio_str = "10% (일반 조정장)"
 
-            final_action = f"🔫 MDD SNIPER (총현금의 {ratio_str})"
-            if qqq_mdd <= -0.50:
-                detail_msg = f"💣 **블랙 스완 (MDD {qqq_mdd*100:.1f}%)!** 스나이핑 시작 시점 총현금의 15% (최후의 보루) {format_krw(input_cash)} 전액 투입! (그동안 아껴둔 최후의 총알)"
+            final_action = f"🔫 딥 스나이퍼 (총현금의 {ratio_str})"
+            if qqq_mdd <= -0.65:
+                detail_msg = f"💣 **블랙 스완 (MDD {qqq_mdd*100:.1f}%)! 양안전쟁/닷컴 버블급 심해 돌파!** 스나이핑 시작 시점 총현금의 15% (최후의 보루) {format_krw(input_cash)} 전액 투입! (그동안 아껴둔 최후의 총알)"
             else:
-                detail_msg = f"하락장 스나이퍼 발동! 스나이핑 시작 시점 총현금의 {ratio_str} ({format_krw(input_cash)}) 투입. (최후의 보루 15%는 미사용 보존 중: {format_krw(reserve_cash_krw)})"
+                detail_msg = f"딥 스나이퍼 발동! 스나이핑 시작 시점 총현금의 {ratio_str} ({format_krw(input_cash)}) 투입. (최후의 보루 15%는 MDD -65% 이상 도달 전까지 미사용 보존 중: {format_krw(reserve_cash_krw)})"
             action_color = "green"
 
         elif st.session_state.sniper_mode_active:
