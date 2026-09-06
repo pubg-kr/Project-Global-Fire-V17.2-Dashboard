@@ -75,20 +75,14 @@ def save_data():
 # ==========================================
 st.set_page_config(page_title=f"{APP_NAME} {APP_VERSION}", layout="wide", page_icon="🔥")
 
-# V24.8 Level Configuration (12단계, 25억 최종 목표 보수적 개편)
+# V25.1 Level Configuration (6-Level 완전 동기화, 25억 최종 목표, 절대 방패)
 LEVEL_CONFIG = {
-    1: {"limit": 50000000, "target_stock": 0.95, "target_cash": 0.05, "name": "LV. 1 (~5천만)"},
-    2: {"limit": 100000000, "target_stock": 0.90, "target_cash": 0.10, "name": "LV. 2 (~1억)"},
-    3: {"limit": 150000000, "target_stock": 0.875, "target_cash": 0.125, "name": "LV. 3 (~1.5억)"},
-    4: {"limit": 300000000, "target_stock": 0.85, "target_cash": 0.15, "name": "LV. 4 (~3억)"},
-    5: {"limit": 500000000, "target_stock": 0.80, "target_cash": 0.20, "name": "LV. 5 (~5억)"},
-    6: {"limit": 800000000, "target_stock": 0.75, "target_cash": 0.25, "name": "LV. 6 (~8억)"},
-    7: {"limit": 1150000000, "target_stock": 0.70, "target_cash": 0.30, "name": "LV. 7 (~11.5억) [🎯 1차: 아내 퇴사/육아]"},
-    8: {"limit": 1500000000, "target_stock": 0.65, "target_cash": 0.35, "name": "LV. 8 (~15억) [SGOV 3억→BOXX 혼합]"},
-    9: {"limit": 1850000000, "target_stock": 0.60, "target_cash": 0.40, "name": "LV. 9 (~18.5억)"},
-    10: {"limit": 2200000000, "target_stock": 0.55, "target_cash": 0.45, "name": "LV. 10 (~22억) [🎯 2차: 조기 은퇴]"},
-    11: {"limit": 2500000000, "target_stock": 0.525, "target_cash": 0.475, "name": "LV. 11 (~25억)"},
-    12: {"limit": float('inf'), "target_stock": 0.50, "target_cash": 0.50, "name": "LV. 12 (25억+) [🎯 Global FIRE]"}
+    1: {"limit": 300000000, "target_stock": 0.90, "target_cash": 0.10, "sniper_avail": 0.80, "sniper_reserve": 0.20, "name": "LV. 1 (~3억) [튜토리얼: 시드 펌핑]"},
+    2: {"limit": 800000000, "target_stock": 0.80, "target_cash": 0.20, "sniper_avail": 0.60, "sniper_reserve": 0.40, "name": "LV. 2 (3억~8억) [현금 벙커 구축]"},
+    3: {"limit": 1300000000, "target_stock": 0.70, "target_cash": 0.30, "sniper_avail": 0.50, "sniper_reserve": 0.50, "name": "LV. 3 (8억~13억) [🎯 1차: 아내 퇴사/육아]"},
+    4: {"limit": 1850000000, "target_stock": 0.55, "target_cash": 0.45, "sniper_avail": 0.40, "sniper_reserve": 0.60, "name": "LV. 4 (13억~18.5억) [BOXX 요새화]"},
+    5: {"limit": 2200000000, "target_stock": 0.40, "target_cash": 0.60, "sniper_avail": 0.30, "sniper_reserve": 0.70, "name": "LV. 5 (18.5억~22억) [🎯 2차: 조기 은퇴 Coast FIRE]"},
+    6: {"limit": float('inf'), "target_stock": 0.30, "target_cash": 0.70, "sniper_avail": 0.20, "sniper_reserve": 0.80, "name": "LV. 6 (22억~25억+) [🎯 Global FIRE: 절대 방패]"}
 }
 
 PROTOCOL_TEXT = f"""
@@ -106,13 +100,13 @@ PROTOCOL_TEXT = f"""
 5.  **[월 적립 전시]:** QQQ MDD -15% 이하 스나이퍼 발동 시, 500만원 100% 주식 풀 투입. (MDD -15% 이내 회복 시 평시 복귀)
 6.  **[월 적립 버블, 🚨 하이브리드 방어 적립·전 Level 공통]:** 역사적 버블(이격도 100% 초과) 경보 중에는 현금 100% 적립 대신, 500만원을 **'+20%p 상향된 방어 비중'**에 맞춰 계속 기계적으로 매수하여 FOMO를 방지한다. (RSI 80 단기과열만 뜬 경우는 평시 목표비중 유지, 매도만 단순 리밸런싱)
 7.  **[버블 경보 해제]:** 조건A: QQQ 월봉 종가 기준 이격도 100% 이하로 **2개월 연속** 마감. 또는 조건B(치트키): QQQ MDD -15% 이하로 즉시 강제해제.
-8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
+8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. 동일 Level 내 ATH 갱신 시 매도 리밸런싱 금지.
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
-10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
-11. **[동적 스나이퍼 글라이드 패스 - 기준점 고정, 🚨 V25.0 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거).
-    *   **[전략: Phase별 예산 책정]** Phase 1(~8억, LV 1~6): 총현금의 **75%** 예산 (25% 영구 킵) │ Phase 2(8억~18.5억, LV 7~9): 총현금의 **50%** 예산 (50% 영구 킵) │ Phase 3(18.5억~25억+, LV 10~12): 총현금의 **30%** 예산 (70% 영구 킵).
-    *   **[전술: 1-2-3-4 피라미드 사격]** 전 Phase 공통 스나이퍼 예산 기준: -15%(10%) → -25%(20%) → -35%(30%) → -45% 이하(40%, 예산 100% 소진).
-    *   **[영구 킵 철칙]** -45% 초과 폭락(-50%, -60%, -80% 등) 시 절대 추가 매수 금지, 각 Phase별 영구 킵 벙커(25%/50%/70%)는 SGOV/BOXX에 영구 보존.
+10. **[래칫 원칙 및 레벨업 즉시 리밸런싱]:** ATH 기준으로 방어력(Level) 영구 고정. 상위 Level 승급(신규 ATH 돌파) 시 고시드 테일리스크 방어를 위해 목표 현금 미달분만큼 즉시 비례 매도하여 현금(SGOV/BOXX) 확보. 동일 Level 내 ATH 경신 시에는 추가 매도 리밸런싱 금지.
+11. **[동적 스나이퍼 글라이드 패스 - 기준점 고정, 🚨 V25.1 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거).
+    *   **[전략: 6-Level 완전 동기화 예산 책정]** LV 1: 80% 예산 (20% 영구 킵) │ LV 2: 60% 예산 (40% 영구 킵) │ LV 3: 50% 예산 (50% 영구 킵, 🎯 아내 퇴사) │ LV 4: 40% 예산 (60% 영구 킵, BOXX 요새화) │ LV 5: 30% 예산 (70% 영구 킵, 🎯 조기 은퇴) │ LV 6: 20% 예산 (80% 영구 킵, 🎯 Global FIRE 절대방패).
+    *   **[전술: 1-2-3-4 피라미드 사격]** 전 Level 공통 스나이퍼 예산 기준: -15%(10%) → -25%(20%) → -35%(30%) → -45% 이하(40%, 예산 100% 소진).
+    *   **[영구 킵 철칙]** -45% 초과 폭락(-50%, -60%, -80% 등) 시 절대 추가 매수 금지, 각 Level별 영구 킵 벙커(20%~80%)는 SGOV/BOXX에 영구 보존.
 12. **[블랙 스완 & 가족 생존]:** 계좌 D(최소 12~24개월 생활비)는 투자와 완전 분리, 스나이퍼 총알로 전용 금지. ETF 내부 레버리지 외 신용융자/마진 등 외부 레버리지 절대 금지.
 13. **[상품 리스크 대응 - 🚨 자발적 손절 아님]:** 폭락(-50%, -80% 등) 자체는 1배수 전환 사유가 아니다. 오직 **운용사의 '조기 청산(상장폐지)' 공식 발표 시에만** 대체 ETF(TQQQ→QLD/QQQ, USD→SOXL/SMH)로 잔존 가치를 옮겨 담는다.
 """
@@ -223,21 +217,20 @@ def get_market_data():
 def determine_level(ath_assets):
     for level, config in sorted(LEVEL_CONFIG.items()):
         if ath_assets <= config['limit']: return level
-    return 12
+    return 6
 
 def get_sniper_phase(current_level):
     """
-    동적 스나이퍼 글라이드 패스 Phase 판정 (Ver 25.0)
-    Phase 1: 시드 펌핑기 (LV 1~6, ~8억) -> 가용률 75% / 영구 킵 25%
-    Phase 2: 자산 성숙기 (LV 7~9, 8억~18.5억) -> 가용률 50% / 영구 킵 50%
-    Phase 3: 은퇴 완성기 (LV 10~12, 18.5억~25억+) -> 가용률 30% / 영구 킵 70%
+    동적 스나이퍼 글라이드 패스 Level별 예산 책정 (Ver 25.1 - 6-Level 완전 동기화)
+    LV 1 (~3억): 가용률 80% / 영구 킵 20% (튜토리얼: 시드 펌핑 최적화, 완벽 거울 대칭)
+    LV 2 (3억~8억): 가용률 60% / 영구 킵 40% (현금 벙커 구축)
+    LV 3 (8억~13억): 가용률 50% / 영구 킵 50% (🎯 1차: 아내 퇴사 및 육아)
+    LV 4 (13억~18.5억): 가용률 40% / 영구 킵 60% (BOXX 혼합 요새화)
+    LV 5 (18.5억~22억): 가용률 30% / 영구 킵 70% (🎯 2차: 조기 은퇴)
+    LV 6 (22억~25억+): 가용률 20% / 영구 킵 80% (🎯 최종: Global FIRE 절대방패)
     """
-    if current_level <= 6:
-        return 1, 0.75, 0.25, "Phase 1: 시드 펌핑기"
-    elif current_level <= 9:
-        return 2, 0.50, 0.50, "Phase 2: 자산 성숙기"
-    else:
-        return 3, 0.30, 0.70, "Phase 3: 은퇴 완성기"
+    cfg = LEVEL_CONFIG.get(current_level, LEVEL_CONFIG[6])
+    return current_level, cfg["sniper_avail"], cfg["sniper_reserve"], cfg["name"].split(" [")[0]
 
 def format_krw(value):
     return f"{int(value):,}원"
@@ -438,13 +431,13 @@ if mkt is not None:
     st.markdown("---")
     st.header("2. 포트폴리오 진단 (Diagnosis)")
     
-    if current_level < 12:
+    if current_level < 6:
         prev_limit = LEVEL_CONFIG[current_level-1]['limit'] if current_level > 1 else 0
         next_limit = LEVEL_CONFIG[current_level]['limit']
         progress = (effective_ath - prev_limit) / (next_limit - prev_limit) if (next_limit - prev_limit) > 0 else 0
         st.progress(max(0.0, min(1.0, progress)), text=f"🚀 Level Up 진행률 → 다음 레벨까지 {format_krw(max(0, next_limit - effective_ath))}")
     else:
-        st.progress(1.0, text="🏆 LV. 12 달성! 25억 Global FIRE 완성. 게임 클리어! 🎯")
+        st.progress(1.0, text="🏆 LV. 6 달성! 25억 Global FIRE (주식 30 : 현금 70) 완성. 게임 클리어! 🎯")
 
     # 자동 ATH 갱신 알림
     if effective_ath > st.session_state.ath_assets and st.session_state.ath_assets > 0:
@@ -556,7 +549,7 @@ if mkt is not None:
     # 기준점이 아직 없다면(과거 데이터 호환/최초 진입 스냅샷) 현재 총현금을 임시 기준으로 사용
     sniper_phase_num, sniper_avail_rate, sniper_reserve_rate, sniper_phase_name = get_sniper_phase(current_level)
     sniper_base_cash_krw = st.session_state.sniper_base_cash_krw if st.session_state.sniper_base_cash_krw > 0 else total_cash_krw
-    sniper_budget_krw = sniper_base_cash_krw * sniper_avail_rate  # Phase별 스나이퍼 가용 예산
+    sniper_budget_krw = sniper_base_cash_krw * sniper_avail_rate  # Level별 스나이퍼 가용 예산
     reserve_cash_krw = sniper_base_cash_krw * sniper_reserve_rate  # 영구 킵 벙커 (Lifeboat Reserve, 절대 미투입)
 
     if is_loss:
@@ -570,8 +563,8 @@ if mkt is not None:
         action_color = "red"
     else:
         if qqq_mdd <= -0.15:
-            # [원칙 3, V25.0] 동적 스나이퍼 글라이드 패스: 1-2-3-4 황금 피라미드 사격
-            # 책정된 스나이퍼 예산(총현금 * Phase 가용률)에 타점별 고정 비율 곱해 즉시 투입
+            # [원칙 3, V25.1] 동적 스나이퍼 글라이드 패스: 6-Level 1:1 동기화 & 1-2-3-4 황금 피라미드 사격
+            # 책정된 스나이퍼 예산(총현금 * Level 가용률)에 타점별 고정 비율 곱해 즉시 투입
             input_cash = 0
             ratio_str = ""
             if qqq_mdd <= -0.45:
@@ -623,8 +616,14 @@ if mkt is not None:
                 detail_msg = f"[{trigger_msg}] 광기 구간이나, 이미 목표 현금(SGOV/BOXX) 비중을 충족했습니다."
         
         else:
-            final_action = "🧘 STABLING (관망)"
-            detail_msg = "평시 구간입니다. '승자의 질주(Let Winners Run)'를 즐기며 기존 포지션을 유지하십시오. 듀얼 리밸런싱은 오직 '월 적립금(새 돈)'으로만 맞춥니다."
+            sell_needed = (total_assets * target_cash_ratio) - total_cash_krw
+            if sell_needed > 0 and (target_cash_ratio - current_cash_ratio) >= 0.02:
+                final_action = f"🎯 MILESTONE REBALANCE (LV. {current_level} 목표 현금 확보)"
+                detail_msg = f"LV. {current_level} 달성에 따른 마일스톤 리밸런싱! 목표 현금 비중({target_cash_ratio*100:.1f}%) 확보를 위해 {format_krw(sell_needed)} 만큼 주식을 매도하여 현금(SGOV/BOXX)을 채우십시오. (고시드 테일리스크 방어, TQQQ/USD 현재 평가액 비례 매도, 수익금 22% 세금 격리 필수)"
+                action_color = "orange"
+            else:
+                final_action = "🧘 STABLING (관망)"
+                detail_msg = "평시 구간입니다. '승자의 질주(Let Winners Run)'를 즐기며 기존 포지션을 유지하십시오. 듀얼 리밸런싱은 오직 '월 적립금(새 돈)'으로만 맞춥니다."
 
     st.info(f"💡 **보유 자산 실행 (Asset Action):** {final_action}")
     if action_color == "red": st.error(detail_msg)
