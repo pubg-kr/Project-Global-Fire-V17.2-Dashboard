@@ -109,7 +109,10 @@ PROTOCOL_TEXT = f"""
 8.  **[버블 이후]:** 확보된 비상금은 스나이퍼용으로만 대기. ATH 갱신 시에도 **매도 리밸런싱 절대 금지** (신규 적립금으로만 비중 조절).
 9.  **[승자의 질주]:** 매수는 항상 TQQQ:USD 50:50 기계적 투입.
 10. **[래칫 원칙]:** ATH 기준으로 방어력(Level) 영구 고정. 레벨업 시 파라미터만 변경, 도달 즉시 팔지 않는다.
-11. **[쿼터 벙커 스나이퍼 - 기준점 고정, 🚨 V24.9 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거). 4분할 쿼터 아키텍처: -15%(10%) → -25%(15%) → -35%(25%) → -45% 이하(25%) 투입 (총 75% 화력), **마지막 25%는 양안전쟁/닷컴급 대비 영구 킵(절대 미투입)**. 검증: 75% 투입 + 25% 영구 보존 = 100%.
+11. **[동적 스나이퍼 글라이드 패스 - 기준점 고정, 🚨 V25.0 UPDATED]:** MDD 최초 -15% 돌파 시점의 **총현금을 100%로 고정(Lock)**하여 이후 타점 계산에 사용 (2단계 암산 제거).
+    *   **[전략: Phase별 예산 책정]** Phase 1(~8억, LV 1~6): 총현금의 **75%** 예산 (25% 영구 킵) │ Phase 2(8억~18.5억, LV 7~9): 총현금의 **50%** 예산 (50% 영구 킵) │ Phase 3(18.5억~25억+, LV 10~12): 총현금의 **30%** 예산 (70% 영구 킵).
+    *   **[전술: 1-2-3-4 피라미드 사격]** 전 Phase 공통 스나이퍼 예산 기준: -15%(10%) → -25%(20%) → -35%(30%) → -45% 이하(40%, 예산 100% 소진).
+    *   **[영구 킵 철칙]** -45% 초과 폭락(-50%, -60%, -80% 등) 시 절대 추가 매수 금지, 각 Phase별 영구 킵 벙커(25%/50%/70%)는 SGOV/BOXX에 영구 보존.
 12. **[블랙 스완 & 가족 생존]:** 계좌 D(최소 12~24개월 생활비)는 투자와 완전 분리, 스나이퍼 총알로 전용 금지. ETF 내부 레버리지 외 신용융자/마진 등 외부 레버리지 절대 금지.
 13. **[상품 리스크 대응 - 🚨 자발적 손절 아님]:** 폭락(-50%, -80% 등) 자체는 1배수 전환 사유가 아니다. 오직 **운용사의 '조기 청산(상장폐지)' 공식 발표 시에만** 대체 ETF(TQQQ→QLD/QQQ, USD→SOXL/SMH)로 잔존 가치를 옮겨 담는다.
 """
@@ -221,6 +224,20 @@ def determine_level(ath_assets):
     for level, config in sorted(LEVEL_CONFIG.items()):
         if ath_assets <= config['limit']: return level
     return 12
+
+def get_sniper_phase(current_level):
+    """
+    동적 스나이퍼 글라이드 패스 Phase 판정 (Ver 25.0)
+    Phase 1: 시드 펌핑기 (LV 1~6, ~8억) -> 가용률 75% / 영구 킵 25%
+    Phase 2: 자산 성숙기 (LV 7~9, 8억~18.5억) -> 가용률 50% / 영구 킵 50%
+    Phase 3: 은퇴 완성기 (LV 10~12, 18.5억~25억+) -> 가용률 30% / 영구 킵 70%
+    """
+    if current_level <= 6:
+        return 1, 0.75, 0.25, "Phase 1: 시드 펌핑기"
+    elif current_level <= 9:
+        return 2, 0.50, 0.50, "Phase 2: 자산 성숙기"
+    else:
+        return 3, 0.30, 0.70, "Phase 3: 은퇴 완성기"
 
 def format_krw(value):
     return f"{int(value):,}원"
@@ -537,8 +554,10 @@ if mkt is not None:
         _update_sniper_flag(False, base_cash=0)
 
     # 기준점이 아직 없다면(과거 데이터 호환/최초 진입 스냅샷) 현재 총현금을 임시 기준으로 사용
+    sniper_phase_num, sniper_avail_rate, sniper_reserve_rate, sniper_phase_name = get_sniper_phase(current_level)
     sniper_base_cash_krw = st.session_state.sniper_base_cash_krw if st.session_state.sniper_base_cash_krw > 0 else total_cash_krw
-    reserve_cash_krw = sniper_base_cash_krw * 0.25  # 영구 킵 벙커 (Permanent Bunker Reserve 25%, 절대 미투입)
+    sniper_budget_krw = sniper_base_cash_krw * sniper_avail_rate  # Phase별 스나이퍼 가용 예산
+    reserve_cash_krw = sniper_base_cash_krw * sniper_reserve_rate  # 영구 킵 벙커 (Lifeboat Reserve, 절대 미투입)
 
     if is_loss:
         # [원칙 1-1] 손실 확정 절대 금지: 본전 미도달 상태에서는 리로드도 절대 발동하지 않음.
@@ -551,28 +570,28 @@ if mkt is not None:
         action_color = "red"
     else:
         if qqq_mdd <= -0.15:
-            # [원칙 3, V24.9] 쿼터 벙커 스나이퍼: 4분할 (75% 투입 : 25% 영구 보존)
-            # 기준점 고정(Lock)된 총현금 100%에 고정 비율을 곱해 즉시 투입
+            # [원칙 3, V25.0] 동적 스나이퍼 글라이드 패스: 1-2-3-4 황금 피라미드 사격
+            # 책정된 스나이퍼 예산(총현금 * Phase 가용률)에 타점별 고정 비율 곱해 즉시 투입
             input_cash = 0
             ratio_str = ""
             if qqq_mdd <= -0.45:
-                input_cash = sniper_base_cash_krw * 0.25
-                ratio_str = "25% (시스템 위기 진압)"
+                input_cash = sniper_budget_krw * 0.40
+                ratio_str = f"예산의 40% ({format_krw(input_cash)}) [스나이퍼 예산 100% 소진 완료]"
             elif qqq_mdd <= -0.35:
-                input_cash = sniper_base_cash_krw * 0.25
-                ratio_str = "25% (대세 하락장 바닥)"
+                input_cash = sniper_budget_krw * 0.30
+                ratio_str = f"예산의 30% ({format_krw(input_cash)}) [누적 60% 집행]"
             elif qqq_mdd <= -0.25:
-                input_cash = sniper_base_cash_krw * 0.15
-                ratio_str = "15% (중급 하락장)"
+                input_cash = sniper_budget_krw * 0.20
+                ratio_str = f"예산의 20% ({format_krw(input_cash)}) [누적 30% 집행]"
             else:
-                input_cash = sniper_base_cash_krw * 0.10
-                ratio_str = "10% (일반 조정장)"
+                input_cash = sniper_budget_krw * 0.10
+                ratio_str = f"예산의 10% ({format_krw(input_cash)}) [누적 10% 집행]"
 
-            final_action = f"🔫 쿼터 스나이퍼 (총현금의 {ratio_str})"
+            final_action = f"🔫 동적 스나이퍼 ({sniper_phase_name} / {ratio_str.split(' [')[0]})"
             if qqq_mdd <= -0.45:
-                detail_msg = f"💥 **시스템 위기 (MDD {qqq_mdd*100:.1f}%)!** 스나이핑 시작 시점 총현금의 25% ({format_krw(input_cash)}) 투입 완료 (누적 75% 화력 집행). 남은 25%({format_krw(reserve_cash_krw)})는 양안전쟁/닷컴급 테일리스크 대비를 위해 **절대 주식 매수 금지 및 SGOV/BOXX 영구 킵(보존)**합니다."
+                detail_msg = f"💥 **시스템 위기 (MDD {qqq_mdd*100:.1f}%)!** {sniper_phase_name} 스나이퍼 가용 예산({format_krw(sniper_budget_krw)}, 총현금의 {int(sniper_avail_rate*100)}%) 중 40% ({format_krw(input_cash)}) 투입 완료 (스나이퍼 예산 100% 소진). 남은 {int(sniper_reserve_rate*100)}%({format_krw(reserve_cash_krw)})는 양안전쟁/닷컴급 대비를 위해 **절대 주식 매수 금지 및 SGOV/BOXX 영구 킵(보존)**합니다."
             else:
-                detail_msg = f"쿼터 스나이퍼 발동! 스나이핑 시작 시점 총현금의 {ratio_str} ({format_krw(input_cash)}) 투입. (최후의 25% 영구 킵 벙커는 미투입 영구 보존: {format_krw(reserve_cash_krw)})"
+                detail_msg = f"동적 스나이퍼 발동 ({sniper_phase_name})! 스나이핑 가용 예산({format_krw(sniper_budget_krw)}, 총현금의 {int(sniper_avail_rate*100)}%) 중 {ratio_str} 투입. (최후의 영구 킵 벙커 {int(sniper_reserve_rate*100)}%는 미투입 영구 보존: {format_krw(reserve_cash_krw)})"
             action_color = "green"
 
         elif st.session_state.sniper_mode_active:
