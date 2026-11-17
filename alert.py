@@ -32,6 +32,25 @@ def calculate_rsi(series, window=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi
 
+def sanitize_price_df(df):
+    """[V25.3] MultiIndex 평탄화, 정산 구간 미완성 NaN 캔들 제거, 액면분할 당일 캐시 불일치 보정"""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    df = df.copy()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    req_cols = [c for c in ['Close', 'Adj Close'] if c in df.columns]
+    if req_cols:
+        df = df.dropna(subset=req_cols)
+    # 액면분할 당일 Yahoo Finance 일봉 Close/Adj Close 부분 정산 불일치(20% 이상 단일 봉 괴리) 방어
+    if 'Close' in df.columns and 'Adj Close' in df.columns and len(df) >= 2:
+        ratio_jump = (df['Close'] / df['Adj Close']).pct_change().abs().max()
+        if pd.notna(ratio_jump) and ratio_jump > 0.20:
+            if df['Adj Close'].pct_change().abs().max() < df['Close'].pct_change().abs().max():
+                scale = float(df['Close'].iloc[-1] / df['Adj Close'].iloc[-1]) if df['Adj Close'].iloc[-1] != 0 else 1.0
+                df['Close'] = df['Adj Close'] * scale
+    return df
+
 def check_market_status():
     print(f"🔍 시장 데이터 분석 중... ({APP_VERSION_FULL})")
     
@@ -45,34 +64,34 @@ def check_market_status():
         fx = yf.download("KRW=X", interval="1d", period="5d", progress=False, auto_adjust=False)
         fx_10y = yf.download("KRW=X", interval="1d", period="10y", progress=False, auto_adjust=False)
         
+        # MultiIndex 처리 (yfinance 최근 변경 대응) 및 [V25.3] 미정산 NaN 캔들/액면분할 왜곡 정제
+        qqq = sanitize_price_df(qqq)
+        qqq_mo_data = sanitize_price_df(qqq_mo_data)
+        tqqq = sanitize_price_df(tqqq)
+        soxx = sanitize_price_df(soxx)
+        soxx_mo_data = sanitize_price_df(soxx_mo_data)
+        fx = sanitize_price_df(fx)
+        fx_10y = sanitize_price_df(fx_10y)
+
         if qqq.empty or soxx.empty or qqq_mo_data.empty or soxx_mo_data.empty or tqqq.empty:
             print("❌ 데이터 수집 실패")
-            return
+            raise ValueError("필수 시장 데이터(QQQ/SOXX/TQQQ)가 비어 있거나 모든 행이 결측치(NaN)입니다.")
 
         # 환율 (USD/KRW) - 실패해도 알림 전체가 죽지 않도록 별도 방어
-        if isinstance(fx.columns, pd.MultiIndex):
-            fx.columns = fx.columns.get_level_values(0)
-        if isinstance(fx_10y.columns, pd.MultiIndex):
-            fx_10y.columns = fx_10y.columns.get_level_values(0)
         usd_krw = float(fx['Close'].iloc[-1]) if not fx.empty else None
         # [원칙 2-1] 환율 극단값 방어: 10년 평균 대비 +20% 이상 폭등 시 분할 환전 경보
         fx_10y_avg = float(fx_10y['Close'].mean()) if not fx_10y.empty else usd_krw
         fx_deviation = (usd_krw / fx_10y_avg) - 1.0 if (usd_krw and fx_10y_avg) else 0
 
-        # MultiIndex 처리 (yfinance 최근 변경 대응)
-        for df in [qqq, qqq_mo_data, tqqq, soxx, soxx_mo_data]:
-            if isinstance(df.columns, pd.MultiIndex): 
-                df.columns = df.columns.get_level_values(0)
-
         # 1. 지표 계산
         # QQQ 주봉 RSI (금요일 마감 기준, 현재 진행형 포함)
         qqq_wk = qqq[['Close']].resample('W-FRI').last().dropna()
         qqq_wk['RSI'] = calculate_rsi(qqq_wk['Close'])
-        qqq_rsi_wk = float(qqq_wk['RSI'].iloc[-1])
+        qqq_rsi_wk = float(qqq_wk['RSI'].dropna().iloc[-1])
 
         # QQQ 월봉 RSI (period=max 데이터 사용)
         qqq_mo_data['RSI'] = calculate_rsi(qqq_mo_data['Close'])
-        qqq_rsi_mo = float(qqq_mo_data['RSI'].iloc[-1]) if len(qqq_mo_data) >= 14 else 0
+        qqq_rsi_mo = float(qqq_mo_data['RSI'].dropna().iloc[-1]) if len(qqq_mo_data) >= 14 else 0
 
         # QQQ 월봉 120개월 이평선 이격도 (진짜 120개월 MA, min_periods=120)
         qqq_mo_data['MA120'] = qqq_mo_data['Close'].rolling(window=120, min_periods=120).mean()
@@ -92,33 +111,40 @@ def check_market_status():
         _qqq_dd_col = 'Adj Close' if 'Adj Close' in qqq.columns else 'Close'
         qqq['Roll_Max'] = qqq[_qqq_dd_col].cummax()
         qqq['DD'] = (qqq[_qqq_dd_col] / qqq['Roll_Max']) - 1.0
-        qqq_mdd = float(qqq['DD'].iloc[-1])
+        qqq_mdd = float(qqq['DD'].dropna().iloc[-1])
         qqq_mdd_pct = qqq_mdd * 100
-        qqq_price = float(qqq['Close'].iloc[-1])
+        qqq_price = float(qqq['Close'].dropna().iloc[-1])
 
         # TQQQ MDD (수정종가 기준, 다운로드 전체 기간 cummax)
         _tqqq_dd_col = 'Adj Close' if 'Adj Close' in tqqq.columns else 'Close'
         tqqq['Roll_Max'] = tqqq[_tqqq_dd_col].cummax()
         tqqq['DD'] = (tqqq[_tqqq_dd_col] / tqqq['Roll_Max']) - 1.0
-        tqqq_mdd = float(tqqq['DD'].iloc[-1]) if not tqqq.empty else 0
+        tqqq_mdd = float(tqqq['DD'].dropna().iloc[-1]) if not tqqq['DD'].dropna().empty else 0
         tqqq_mdd_pct = tqqq_mdd * 100
 
         # SOXX MDD (수정종가 기준, 다운로드 전체 기간 cummax - rolling 252일이면 1년 신고가 시 0% 오류 방지)
         _soxx_dd_col = 'Adj Close' if 'Adj Close' in soxx.columns else 'Close'
         soxx['Roll_Max'] = soxx[_soxx_dd_col].cummax()
         soxx['DD'] = (soxx[_soxx_dd_col] / soxx['Roll_Max']) - 1.0
-        soxx_mdd = float(soxx['DD'].iloc[-1]) if not soxx.empty else 0
+        soxx_mdd = float(soxx['DD'].dropna().iloc[-1]) if not soxx['DD'].dropna().empty else 0
         soxx_mdd_pct = soxx_mdd * 100
-        soxx_price = float(soxx['Close'].iloc[-1]) if not soxx.empty else 0
+        soxx_price = float(soxx['Close'].dropna().iloc[-1]) if not soxx['Close'].dropna().empty else 0
+
+        # [V25.3] IEEE 754 NaN 비교 침묵(NaN <= -0.15 -> False)으로 인한 스나이퍼 불발/우선순위 역전 원천 차단
+        if any(pd.isna(v) for v in [qqq_price, qqq_mdd, qqq_rsi_mo, qqq_mo_dev, tqqq_mdd]):
+            raise ValueError(
+                f"핵심 판정 지표 NaN 감지 (qqq_price={qqq_price}, qqq_mdd={qqq_mdd}, "
+                f"qqq_rsi_mo={qqq_rsi_mo}, qqq_mo_dev={qqq_mo_dev}, tqqq_mdd={tqqq_mdd})"
+            )
 
         # SOXX 주봉 RSI
         soxx_wk = soxx[['Close']].resample('W-FRI').last().dropna()
         soxx_wk['RSI'] = calculate_rsi(soxx_wk['Close'])
-        soxx_rsi_wk = float(soxx_wk['RSI'].iloc[-1]) if len(soxx_wk) >= 14 else 0
+        soxx_rsi_wk = float(soxx_wk['RSI'].dropna().iloc[-1]) if not soxx_wk['RSI'].dropna().empty else 0
 
         # SOXX 월봉 RSI 및 120개월 이평선 이격도 (period=max 데이터 사용, min_periods=120)
         soxx_mo_data['RSI'] = calculate_rsi(soxx_mo_data['Close'])
-        soxx_rsi_mo = float(soxx_mo_data['RSI'].iloc[-1]) if len(soxx_mo_data) >= 14 else 0
+        soxx_rsi_mo = float(soxx_mo_data['RSI'].dropna().iloc[-1]) if not soxx_mo_data['RSI'].dropna().empty else 0
         soxx_mo_data['MA120'] = soxx_mo_data['Close'].rolling(window=120, min_periods=120).mean()
         _soxx_ma120_s = soxx_mo_data['MA120'].dropna()
         _soxx_ma120 = float(_soxx_ma120_s.iloc[-1]) if not _soxx_ma120_s.empty else None

@@ -1,4 +1,4 @@
-# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 25.2 The Golden Linear & FIRE Lockdown)
+# 🏛️ PROJECT GLOBAL FIRE : Master Protocol (Ver 25.3 The Golden Linear & FIRE Lockdown)
 **"The Simple, Unbreakable & Tax-Free"**
 
 *   **System Owner:** 30세 프로그래머 (Busan, KR / 한화오션)
@@ -15,9 +15,10 @@
 ## [원칙 0] 시스템 판정 기준 및 데이터 표준 (System Core) 🚨 UPDATED
 **마스터 인덱스 통일 (The One Index):** 시스템의 복잡성을 제거하기 위해, 모든 버블 경보 및 스나이퍼 발동의 기준 지표는 오직 **'QQQ (달러 차트)'** 하나로 통일한다. QQQ의 신호에 따라 TQQQ와 USD 두 자산을 동시에 동일하게 통제한다. (SOXX 지표는 대시보드에서 현황 참고용으로만 표시)
 
-**데이터 판정 기준 (노이즈 제거):**
+**데이터 판정 기준 (노이즈 제거 및 무결성 방어):**
 *   **QQQ MDD:** 장중 급락 노이즈를 무시하기 위해, 오직 **'수정종가(Adjusted Close)'** 기준으로 계산한다. (공식: 현재 수정종가 / 역사적 최고 수정종가 − 1)
 *   **월봉 지표 (RSI, 120월 이격도):** 매월 **'마지막 미국 거래일 종가(월봉 종가)'** 기준으로만 확정하며, 장중/주봉 노이즈는 철저히 무시한다. 신호 발생 시 다음 달 첫 거래일에 기계적으로 실행한다.
+*   **[V25.3] 정산 구간 결측(`NaN`) 및 액면분할 왜곡 원천 차단:** Yahoo Finance 일봉 정산 시간대 미완성 `NaN` 캔들을 사전 제거(`.dropna()`)하고, 핵심 지표에 `NaN` 유입 시 IEEE 754 비교 침묵(`NaN <= -0.15` → `False`)으로 인해 1순위 스나이퍼가 불발·역전되는 것을 Fail-Safe 예외 처리로 원천 차단한다. 또한 액면분할 당일 `Close`/`Adj Close` 정산 시차 왜곡을 자동 보정한다.
 
 **명령어 우선순위 (Priority):** 지표가 충돌할 경우 시스템은 다음의 순서로 강제 집행된다.
 1.  **1순위 [전시 상황]:** QQQ MDD -15% 이하 (모든 버블 경보를 즉시 무시하고 스나이퍼 및 주식 몰빵 적립 가동)

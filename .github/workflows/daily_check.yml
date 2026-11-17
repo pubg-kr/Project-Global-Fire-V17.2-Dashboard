@@ -2,21 +2,25 @@ name: Daily Market Watchdog
 
 on:
   schedule:
-    # 매일 UTC 22:00 (한국 시간 아침 7:00) 실행
-    - cron: '0 22 * * *'
+    # 매일 UTC 22:00 (한국 시간 아침 7:00) 실행 -> [V25.3] 정각(:00) 큐 병목 및 UTC 자정 정산 구간(00~02Z) 밀림 방지를 위해 UTC 21:23 (한국 시간 아침 06:23, 미국 정규장 마감 직후) 실행
+    - cron: '23 21 * * *'
   workflow_dispatch: # 수동 실행 버튼 추가
+
+permissions:
+  contents: read
+  actions: write
 
 jobs:
   check_market:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -28,3 +32,10 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           SEND_DAILY_HEALTH: ${{ secrets.SEND_DAILY_HEALTH }}
         run: python alert.py
+
+      - name: Keep Scheduled Workflow Alive (Reset 60-day Inactivity Timer)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method PUT "repos/${{ github.repository }}/actions/workflows/daily_check.yml/enable" || true

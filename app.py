@@ -117,6 +117,25 @@ PROTOCOL_TEXT = f"""
 # ==========================================
 # 2. 유틸리티 함수
 # ==========================================
+def sanitize_price_df(df):
+    """[V25.3] MultiIndex 평탄화, 정산 구간 미완성 NaN 캔들 제거, 액면분할 당일 캐시 불일치 보정"""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    df = df.copy()
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    req_cols = [c for c in ['Close', 'Adj Close'] if c in df.columns]
+    if req_cols:
+        df = df.dropna(subset=req_cols)
+    # 액면분할 당일 Yahoo Finance 일봉 Close/Adj Close 부분 정산 불일치(20% 이상 단일 봉 괴리) 방어
+    if 'Close' in df.columns and 'Adj Close' in df.columns and len(df) >= 2:
+        ratio_jump = (df['Close'] / df['Adj Close']).pct_change().abs().max()
+        if pd.notna(ratio_jump) and ratio_jump > 0.20:
+            if df['Adj Close'].pct_change().abs().max() < df['Close'].pct_change().abs().max():
+                scale = float(df['Close'].iloc[-1] / df['Adj Close'].iloc[-1]) if df['Adj Close'].iloc[-1] != 0 else 1.0
+                df['Close'] = df['Adj Close'] * scale
+    return df
+
 def calculate_indicators(df, price_col='Close'):
     """RSI 및 MDD(Drawdown) 계산. price_col='Adj Close' 지정 시 수정종가 기준으로 MDD 계산 (원칙 0)."""
     if df.empty: return 0, 0
@@ -131,7 +150,9 @@ def calculate_indicators(df, price_col='Close'):
     
     df['Roll_Max'] = df[col].cummax()
     df['DD'] = (df[col] / df['Roll_Max']) - 1.0
-    return float(df['RSI'].iloc[-1]), float(df['DD'].iloc[-1])
+    rsi_s = df['RSI'].dropna()
+    dd_s = df['DD'].dropna()
+    return (float(rsi_s.iloc[-1]) if not rsi_s.empty else 0.0), (float(dd_s.iloc[-1]) if not dd_s.empty else 0.0)
 
 def get_market_data():
     try:
@@ -144,10 +165,16 @@ def get_market_data():
         exch = yf.download("KRW=X", period="1d", progress=False, auto_adjust=False)
         exch_10y = yf.download("KRW=X", period="10y", progress=False, auto_adjust=False)
         
-        if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty or qqq_mo.empty or soxx_mo.empty: return None
+        qqq_dy = sanitize_price_df(qqq_dy)
+        qqq_mo = sanitize_price_df(qqq_mo)
+        soxx_mo = sanitize_price_df(soxx_mo)
+        tqqq_wk = sanitize_price_df(tqqq_wk)
+        usd_wk = sanitize_price_df(usd_wk)
+        soxx_dy = sanitize_price_df(soxx_dy)
+        exch = sanitize_price_df(exch)
+        exch_10y = sanitize_price_df(exch_10y)
 
-        for d in [qqq_dy, qqq_mo, soxx_mo, tqqq_wk, usd_wk, soxx_dy, exch, exch_10y]:
-            if isinstance(d.columns, pd.MultiIndex): d.columns = d.columns.get_level_values(0)
+        if qqq_dy.empty or exch.empty or tqqq_wk.empty or usd_wk.empty or soxx_dy.empty or qqq_mo.empty or soxx_mo.empty: return None
 
         current_rate = float(exch['Close'].iloc[-1])
         # [원칙 2-1] 환율 극단값 방어: 10년 평균 대비 +20% 이상이면 분할 환전 경보
@@ -161,8 +188,7 @@ def get_market_data():
         # QQQ 주봉 RSI (일봉 → W-FRI 리샘플링, 진행 중인 주 포함)
         qqq_wk_for_rsi = qqq_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
             'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
-        calculate_indicators(qqq_wk_for_rsi)
-        qqq_rsi_wk = float(qqq_wk_for_rsi['RSI'].iloc[-1])
+        qqq_rsi_wk, _ = calculate_indicators(qqq_wk_for_rsi)
 
         # QQQ 월봉 RSI (원칙 1-3: 월봉 RSI 80 단일 기준)
         qqq_rsi_mo, _ = calculate_indicators(qqq_mo)
@@ -182,8 +208,7 @@ def get_market_data():
                 break
         
         # MDD 및 RSI 계산 (원칙 0: QQQ MDD는 '수정종가(Adj Close)' 기준으로 노이즈 제거)
-        calculate_indicators(qqq_dy, price_col='Adj Close')
-        qqq_mdd = float(qqq_dy['DD'].iloc[-1])
+        _, qqq_mdd = calculate_indicators(qqq_dy, price_col='Adj Close')
         
         tqqq_rsi_wk, tqqq_mdd = calculate_indicators(tqqq_wk, price_col='Adj Close')
         usd_rsi_wk, usd_mdd = calculate_indicators(usd_wk, price_col='Adj Close')
@@ -192,7 +217,7 @@ def get_market_data():
         soxx_wk_for_rsi = soxx_dy[['Open', 'High', 'Low', 'Close', 'Volume']].resample('W-FRI').agg({
             'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}).dropna()
         calculate_indicators(soxx_wk_for_rsi)
-        soxx_rsi_wk = float(soxx_wk_for_rsi['RSI'].iloc[-1])
+        soxx_rsi_wk = float(soxx_wk_for_rsi['RSI'].dropna().iloc[-1])
 
         # SOXX 월봉 RSI 및 120개월 이평선 이격도 (period=max 데이터로 진짜 120개월 MA 계산)
         soxx_rsi_mo, _ = calculate_indicators(soxx_mo)
@@ -204,7 +229,7 @@ def get_market_data():
         _soxx_dd_col = 'Adj Close' if 'Adj Close' in soxx_dy.columns else 'Close'
         soxx_dy['Roll_Max'] = soxx_dy[_soxx_dd_col].cummax()
         soxx_dy['DD'] = (soxx_dy[_soxx_dd_col] / soxx_dy['Roll_Max']) - 1.0
-        soxx_mdd = float(soxx_dy['DD'].iloc[-1])
+        soxx_mdd = float(soxx_dy['DD'].dropna().iloc[-1])
 
         return {
             'qqq_dy': qqq_dy, 'qqq_price': qqq_price,

@@ -1,5 +1,25 @@
 # 📅 릴리즈 노트 (Update History)
 
+### Ver 25.3 (Data Integrity Fail-Safe & Watchdog Immortal Keepalive)
+- **🛡️ 데이터 무결성 방어 및 `NaN` 우선순위 역전 원천 차단 (`alert.py`, `app.py`):**
+    - **문제 인식 (`$nan` / `MDD nan%` 표기 오류 및 스나이퍼 침묵 버그):**
+        - GitHub Actions 공유 러너 지연으로 UTC 자정 직후 정산 시간대(`01:00~02:30 UTC`)에 `yf.download(..., interval="1d")` 호출 시, 마지막 행(`.iloc[-1]`)에 종가(`Close`, `Adj Close`)가 비어 있는 미완성 `NaN` 캔들이 유입됨.
+        - 기존 코드는 주봉 리샘플링에만 `.dropna()`가 있고 일봉 현재가·MDD 산출부에는 결측 제거가 없어 `$nan` 및 `MDD nan%`가 출력됨.
+        - **치명적 CRO 리스크:** IEEE 754 부동소수점 표준상 `float('nan') <= -0.15` 및 `<= -0.30`은 예외 없이 `False`로 평가되어, 실제 폭락장에서도 1순위 스나이퍼 및 TQQQ 급락 경보가 침묵하고 2순위 버블 경보로 넘어가는 **우선순위 역전(Priority Inversion)** 위험이 존재했음.
+        - 또한 액면분할 당일(예: `2026-11-05` SOXX 3:1 분할) Yahoo Finance 일봉 `Close`와 `Adj Close` 간 부분 정산 시차로 주봉 RSI가 일시 왜곡(`85.7`)되는 현상 확인.
+    - **해법 (`sanitize_price_df` 정제 파이프라인 및 Fail-Safe 검증 도입):**
+        - `sanitize_price_df()` 신설: 다운로드 직후 MultiIndex 평탄화 → `Close`/`Adj Close` 결측(`NaN`) 행 즉시 제거 → 액면분할 당일 `Close`/`Adj Close` 단일 봉 비율 급변(>20%) 감지 시 분할 보정 시계열로 자동 동기화.
+        - 모든 RSI/MDD 최종 스칼라 추출 시 `.dropna().iloc[-1]` 이중 방어 적용.
+        - `alert.py`: 판정 직전 핵심 지표(`qqq_price`, `qqq_mdd`, `qqq_rsi_mo`, `qqq_mo_dev`, `tqqq_mdd`)에 `pd.isna()` 검증 게이트를 추가하여, 만일 원천 데이터가 전량 손상된 경우 오판정 브리핑 대신 즉시 `⚠️ [System Error]` 알림을 발송하도록 Fail-Safe 구축.
+- **🤖 GitHub Actions 감시 봇 영구 생존(Keepalive) 및 정각 병목 해소 (`.github/workflows/daily_check.yml`):**
+    - **문제 인식:** 공개(Public) 저장소에서 60일간 커밋이 없으면 GitHub 정책에 의해 스케줄 워크플로우가 `disabled_inactivity` 상태로 자동 정지되어 감시 공백이 발생함. 또한 정각(`0 22 * * *`) 스케줄 집중으로 실행이 3~5시간 밀려 UTC 자정 정산 구간(`01~03 UTC`)에 진입하는 현상 발생.
+    - **해법:**
+        - 스케줄을 `23 21 * * *` (UTC 21:23 = 한국시간 아침 06:23, 미국 정규장 마감 직후 비혼잡 분 단위)로 변경하여 정각 큐 병목과 UTC 자정 미정산 구간을 동시 회피하고, `cron` 변경 푸시를 통해 비활성화된 워크플로우를 즉시 재가동.
+        - 워크플로우 실행 시마다 GitHub REST API (`PUT .../workflows/daily_check.yml/enable`, `actions: write`)를 호출하여 더미 커밋 없이 60일 비활성 타이머를 매회 자동 리셋.
+        - 구버전 액션(`checkout@v2`, `setup-python@v2`)을 최신 표준(`checkout@v4`, `setup-python@v5`, Python `3.11`)으로 업그레이드.
+- **⚙️ 버전 갱신:** `version.py`의 `APP_VERSION`을 `25.2` → `25.3`으로 판올림.
+- **📝 문서 개정:** `TradingCoreLogic.md`, `TradingCoreLogic_Summary.md` [원칙 0 / Priority 0] 데이터 무결성 표준 명시 및 Ver 25.3 반영.
+
 ### Ver 25.2 (The Golden Linear & FIRE Lockdown - 2단계 엑시트 완성)
 - **🏛️ 골든 리니어 10 (Golden Linear 10) 아키텍처 도입:**
     - **문제 인식 (조기 감속으로 인한 Cash Drag 해소):**
